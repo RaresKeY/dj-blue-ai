@@ -1,0 +1,21 @@
+{
+  "_comment": "Placeholder file for mood tags dataset. Replace with actual mappings later.",
+  "moods": [
+    {
+      "tag": "happy",
+      "description": "Energetic and uplifting tracks"
+    },
+    {
+      "tag": "calm",
+      "description": "Soft, ambient, or chill background music"
+    },
+    {
+      "tag": "focused",
+      "description": "Minimal distraction, steady rhythm"
+    },
+    {
+      "tag": "sad",
+      "description": "Slow tempo, emotional tone"
+    }
+  ]
+}
