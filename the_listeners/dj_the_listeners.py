@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 DJ GUI Recorder - Interfață Grafică PyQt6 pentru Înregistrarea Multi-Canal
+# Requires Python 3.11
+# System dependency: ffmpeg must be installed and in PATH
 """
 import sys
 import os
