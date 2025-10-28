@@ -26,3 +26,5 @@ print(response)
 # Exercise 3: Experiment with different messages and data
 
 # Exercise 4: Save response to file
+
+# Exercise 5: (Optional) Using a ChatBot, create your own script that makes AI Studio API calls without the helper class
