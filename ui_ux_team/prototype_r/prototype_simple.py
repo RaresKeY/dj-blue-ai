@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QSlider
+    QApplication, QWidget, QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QSlider, QGraphicsDropShadowEffect
 )
-from PySide6.QtGui import QPixmap, QIcon
+from PySide6.QtGui import QPixmap, QIcon, QPainter, QLinearGradient, QColor
 from PySide6.QtCore import Qt, QTimer, QElapsedTimer
 import sys
 from pathlib import Path
@@ -16,10 +16,10 @@ ICON_PREV = ASSETS_DIR / "prev.png"
 ICON_MINIMIZE = ASSETS_DIR / "minimize.png"
 ICON_CLOSE = ASSETS_DIR / "close.png"
 ALBUM_ART = ASSETS_DIR / "album.png"
-GRANULARITY = 1000  # ms-level precision for smooth progress
+GRANULARITY = 1000  # ms-level precision
 
 
-# --- Custom slider for smooth, clickable control ---
+# --- Smooth clickable slider ---
 class SmoothSlider(QSlider):
     def __init__(self, *args, **kwargs):
         super().__init__(Qt.Horizontal, *args, **kwargs)
@@ -35,6 +35,27 @@ class SmoothSlider(QSlider):
             self.setValue(value)
             event.accept()
         super().mousePressEvent(event)
+
+
+# --- Fade helper ---
+def apply_fade(pixmap: QPixmap, side: str):
+    faded = QPixmap(pixmap.size())
+    faded.fill(Qt.transparent)
+    painter = QPainter(faded)
+    painter.drawPixmap(0, 0, pixmap)
+    gradient = QLinearGradient(0, 0, pixmap.width(), 0)
+
+    if side == "right":
+        gradient.setColorAt(0, QColor(26, 34, 53, 255))
+        gradient.setColorAt(0.8, QColor(26, 34, 53, 0))
+    else:
+        gradient.setColorAt(0.2, QColor(26, 34, 53, 0))
+        gradient.setColorAt(1, QColor(26, 34, 53, 255))
+
+    painter.setCompositionMode(QPainter.CompositionMode_DestinationIn)
+    painter.fillRect(faded.rect(), gradient)
+    painter.end()
+    return faded
 
 
 # --- Main UI ---
@@ -53,21 +74,25 @@ class MusicPlayerUI(QWidget):
         top_bar.addWidget(title)
         top_bar.addStretch()
 
-        # === Album art row ===
+        # === Album art row with fades ===
         album_layout = QHBoxLayout()
         for i in range(3):
             album = QLabel()
             pix = QPixmap(str(ALBUM_ART))
-            album.setPixmap(pix.scaled(90 if i != 1 else 120,
-                                       90 if i != 1 else 120,
-                                       Qt.KeepAspectRatio,
-                                       Qt.SmoothTransformation))
+            if i == 0:
+                pix = apply_fade(pix.scaled(90, 90, Qt.KeepAspectRatio, Qt.SmoothTransformation), "left")
+            elif i == 2:
+                pix = apply_fade(pix.scaled(90, 90, Qt.KeepAspectRatio, Qt.SmoothTransformation), "right")
+            else:
+                pix = pix.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+            album.setPixmap(pix)
             album.setAlignment(Qt.AlignCenter)
             album_layout.addWidget(album)
 
-        # === Progress bar + time labels ===
-        self.total_seconds = 3 * 60 + 58  # 3:58
-        self.current_time = 65            # 1:05 start
+        # === Progress bar + times ===
+        self.total_seconds = 3 * 60 + 58
+        self.current_time = 65
 
         self.time_left = QLabel(self.format_time(self.current_time))
         self.time_right = QLabel(self.format_time(self.total_seconds))
@@ -92,14 +117,20 @@ class MusicPlayerUI(QWidget):
             }
             QSlider::handle:horizontal {
                 background: #ff0080;
-                border: 2px solid #1a2235;        /* slight outline */
+                border: 2px solid #1a2235;
                 width: 12px;
                 height: 18px;
-                border-radius: 7px;               /* perfect circle */
-                margin: -6px 0;                   /* aligns vertically */
-                box-shadow: 0px 0px 4px #ff00aa;  /* soft glow */
+                border-radius: 7px;
+                margin: -6px 0;
             }
         """)
+
+        glow = QGraphicsDropShadowEffect()
+        glow.setBlurRadius(15)
+        glow.setColor(QColor("#ff00aa"))
+        glow.setOffset(0)
+        self.slider.setGraphicsEffect(glow)
+
 
         time_layout = QHBoxLayout()
         time_layout.addWidget(self.time_left)
@@ -127,7 +158,7 @@ class MusicPlayerUI(QWidget):
         controls.addWidget(btn_next)
         controls.addStretch()
 
-        # === Main layout ===
+        # === Layout ===
         layout = QVBoxLayout(self)
         layout.addLayout(top_bar)
         layout.addLayout(album_layout)
@@ -135,9 +166,9 @@ class MusicPlayerUI(QWidget):
         layout.addWidget(self.slider)
         layout.addLayout(controls)
 
-        # === Smooth progression timer (60 FPS) ===
+        # === Timer ===
         self._tick = QTimer(self)
-        self._tick.setInterval(16)  # ~60 FPS
+        self._tick.setInterval(16)
         self._elapsed = QElapsedTimer()
         self._elapsed.start()
         self._tick.timeout.connect(self.advance_time)
@@ -170,12 +201,10 @@ class MusicPlayerUI(QWidget):
         self.is_playing = not self.is_playing
 
         if self.is_playing:
-            # Resume
             self.setup_icon_button(self.btn_play, ICON_PAUSE, 60)
             self._elapsed.restart()
             self._tick.start()
         else:
-            # Pause
             self.setup_icon_button(self.btn_play, ICON_PLAY, 60)
             self._tick.stop()
 
