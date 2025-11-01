@@ -114,7 +114,7 @@ class MusicPlayerUI(QWidget):
         btn_prev.clicked.connect(self.prev_song)
         self.btn_play.clicked.connect(self.toggle_play)
         self.is_playing = True
-        btn_next.clicked.connect(self.prev_song)
+        btn_next.clicked.connect(self.next_song)
 
         self.setup_icon_button(btn_prev, ICON_PREV, 25)
         self.setup_icon_button(self.btn_play, ICON_PAUSE, 60)
