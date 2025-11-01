@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QSlider
+    QApplication, QWidget, QPushButton, QLabel, QHBoxLayout, QVBoxLayout, QSlider, QGraphicsDropShadowEffect
 )
 from PySide6.QtGui import QPixmap, QIcon, QPainter, QLinearGradient, QColor
 from PySide6.QtCore import Qt, QTimer, QElapsedTimer
@@ -122,9 +122,15 @@ class MusicPlayerUI(QWidget):
                 height: 18px;
                 border-radius: 7px;
                 margin: -6px 0;
-                box-shadow: 0px 0px 4px #ff00aa;
             }
         """)
+
+        glow = QGraphicsDropShadowEffect()
+        glow.setBlurRadius(15)
+        glow.setColor(QColor("#ff00aa"))
+        glow.setOffset(0)
+        self.slider.setGraphicsEffect(glow)
+
 
         time_layout = QHBoxLayout()
         time_layout.addWidget(self.time_left)
