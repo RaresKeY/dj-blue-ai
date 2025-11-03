@@ -1,0 +1,6 @@
+faster-whisper
+pydantic
+tqdm
+python-dotenv
+SpeechRecognition
+pydub
