@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 .env
+
+# Managed Mem
+managed_mem.json
