@@ -1,43 +1,104 @@
+"""
+Headless runner that wires the recording worker to the transcriber.
+
+It discovers the best-guess capture devices, starts `RecordingWorker`
+inside a Qt event loop, and forwards the generated WAV files to
+`WhisperEngine` for transcription.
+"""
+
 from __future__ import annotations
 
+import signal
 import sys
+import threading
+from pathlib import Path
+from typing import Optional
 
-from the_listeners import RECORD_SECONDS, RecordingWorker
+from PyQt6.QtCore import QCoreApplication
+
+from the_listeners import RECORD_SECONDS, RecordingWorker, suppress_alsa_warnings
 from the_listeners.device_helpers import resolve_device_params
 from transcribers import WhisperEngine
 
 
-def main() -> None:
-    params = resolve_device_params(RECORD_SECONDS)
-
+def _print_selection(params) -> None:
     print("Selected devices:")
     print(f"  Mic     -> [{params['mic_id']}] {params['mic_name']}")
-    print(f"  Speaker -> [{params['speaker_id']}] {params['speaker_name']}")
+
+    speaker_id = params.get("speaker_id")
+    if speaker_id is None:
+        print("  Speaker -> dezactivat (nu există dispozitiv de monitorizare disponibil)")
+    else:
+        speaker_name = params.get("speaker_name", "")
+        print(f"  Speaker -> [{speaker_id}] {speaker_name}")
+
     print(f"  Duration -> {params['duration']}s per cycle")
 
-    # records microphone OR speakers
-    listener_worker = RecordingWorker(
+
+def _wire_handlers(worker: RecordingWorker, whisper: WhisperEngine) -> None:
+    worker.log_message.connect(lambda message: print(message))
+
+    def on_finished(self_path: str, others_path: str) -> None:
+        print("\nCycle complete:")
+        print(f"  SELF   -> {self_path}")
+        if others_path:
+            print(f"  OTHERS -> {others_path}")
+        else:
+            print("  OTHERS -> skipped")
+
+        _start_transcription(Path(self_path), whisper)
+
+    worker.finished_cycle.connect(on_finished)
+
+
+def _start_transcription(wav_path: Path, whisper: WhisperEngine) -> None:
+    def _job():
+        try:
+            result = whisper.transcribe(wav_path)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[Transcriber] Failed: {exc}")
+            return
+
+        print("\n[Transcriber] Transcript ready:")
+        print(result.get("text", "").strip())
+        print(result.get("metadata", {}))
+
+    threading.Thread(target=_job, daemon=True).start()
+
+
+def main() -> None:
+    suppress_alsa_warnings()
+    app = QCoreApplication(sys.argv)
+
+    params = resolve_device_params(RECORD_SECONDS)
+    _print_selection(params)
+
+    worker = RecordingWorker(
         params["mic_id"],
-        params["speaker_id"],
-        params["duration"],
+        params.get("speaker_id"),
+        20,
     )
-    listener_worker.start()
 
-    # local whisper model (TODO: manage cpu usage)
-    transcriber_worker = WhisperEngine()
+    whisper = WhisperEngine()
+    _wire_handlers(worker, whisper)
 
-    last_path = listener_worker.finished_cycle
+    def shutdown() -> None:
+        if worker.isRunning():
+            worker.stop()
+            worker.wait()
 
-    while True:
-        if listener_worker.finished_cycle is not last_path:
-            data = transcriber_worker.transcribe(listener_worker.finished_cycle)
-            print(data["text"])
-            # print(data["segments"])
-            print(data["metadata"])
+    def handle_sigint(*_):
+        print("\nStopping recorder...")
+        shutdown()
+        app.quit()
 
-        last_path = listener_worker.finished_cycle
+    signal.signal(signal.SIGINT, handle_sigint)
 
-        data["text"]
+    worker.start()
+    exit_code = app.exec()
+    shutdown()
+    sys.exit(exit_code)
+
 
 if __name__ == "__main__":
     try:
@@ -45,5 +106,3 @@ if __name__ == "__main__":
     except RuntimeError as exc:
         print(f"Device discovery failed: {exc}", file=sys.stderr)
         sys.exit(1)
-
-    

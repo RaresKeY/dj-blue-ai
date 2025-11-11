@@ -160,7 +160,7 @@ class WhisperEngine:
     """
     _cache = {}
 
-    def __init__(self, model_name="small", compute_type="int8", log=None):
+    def __init__(self, model_name="small", compute_type="int8", *, device="cpu", log=None):
         self.log = log or (lambda *_: None)
         key = (model_name, compute_type)
         if key in WhisperEngine._cache:
@@ -172,7 +172,7 @@ class WhisperEngine:
             raise RuntimeError("Missing 'faster-whisper'. Install: pip install faster-whisper")
         self.log(f"[Whisper] Loading model: {model_name} ({compute_type}) ...")
         try:
-            self.model = WhisperModel(model_name, compute_type=compute_type)
+            self.model = WhisperModel(model_name, device=device, compute_type=compute_type)
         except Exception as e:
             raise RuntimeError(f"Whisper load error: {e}")
         WhisperEngine._cache[key] = self.model
