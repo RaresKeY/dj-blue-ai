@@ -200,7 +200,7 @@ class WhisperEngine:
                 "language_probability": float(getattr(info, "language_probability", 0.0)),
                 "duration_sec": float(getattr(info, "duration", 0.0))
             }
-            return text, segments, meta
+            return {"text": text, "segments": segments, "metadata": meta}
         except Exception as e:
             raise RuntimeError(f"Whisper transcription failed: {e}")
 
