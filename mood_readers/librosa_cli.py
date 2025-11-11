@@ -229,6 +229,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         output_path = Path(args.output)
         try:
             _write_results_csv(output_path, analysis_results)
+            save_analysis_to_json(output_path, analysis_results[0][1], output_path.with_suffix('.json'))
             print(f"\nRezultatele au fost salvate în: {output_path}")
         except OSError as exc:
             print(f"\n!!! Nu am putut salva rezultatele: {exc}", file=sys.stderr)
@@ -242,6 +243,29 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         return 1
     return 0
 
+#function that saves camelot and bpm to a json file
+def save_analysis_to_json(file_path: str, analysis: dict, json_path: str) -> None:
+    """Salvează analiza într-un fișier JSON."""
+    import json
+
+    data_to_save = {
+        "file_name": analysis.get("file_name", ""),
+        "bpm": analysis.get("bpm", ""),
+        "key_camelot": analysis.get("key_camelot", ""),
+        "mood_detailed": analysis.get("mood_detailed", "")
+    }
+
+    with open(json_path, 'w', encoding='utf-8') as json_file:
+        json.dump(data_to_save, json_file, ensure_ascii=False, indent=4)
+
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+
+
+
+
+
+
