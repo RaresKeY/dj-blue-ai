@@ -18,7 +18,10 @@ import wave
 # --- DEPENDENȚE GUI ---
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from .audio_utils import suppress_alsa_warnings
 from .device_helpers import resolve_device_params
+
+suppress_alsa_warnings()
 # ----------------------------------------------------
 # 1. CONSTANTE ȘI CĂI
 # ----------------------------------------------------
@@ -31,7 +34,7 @@ CONFIG_FILE = Path.cwd() / "listener_config.json"  # Fișierul de configurare sa
 CHUNK = 1024
 FORMAT = pyaudio.paInt16
 RATE = 44100
-RECORD_SECONDS = 60  # Durata ciclului de monitorizare
+RECORD_SECONDS = 10 # Durata ciclului de monitorizare
 
 
 # ----------------------------------------------------

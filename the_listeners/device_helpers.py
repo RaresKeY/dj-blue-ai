@@ -12,6 +12,9 @@ from typing import Dict, Iterator, Optional
 
 import pyaudio
 
+from .audio_utils import suppress_alsa_warnings
+
+suppress_alsa_warnings()
 LOOPBACK_HINTS = ("loopback", "monitor", "stereo mix", "what u hear")
 
 
