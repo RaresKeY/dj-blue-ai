@@ -1,15 +1,11 @@
-import json
-import os
-
 from pathlib import Path
-from helpers.managed_mem import ManagedMem 
-
-# TODO: create custom json rules for save if necessary in managed mem
+from architects.helpers.managed_mem import ManagedMem
 
 class Song():
     def __init__(self, song_filepath):
         # Required
-        self.filepath: Path = song_filepath
+        path_obj = Path(song_filepath)
+        self.filepath: Path = path_obj
         self.mood_tags: list[str] = None
         self.camelot_tags: list[str] = None
         self.tempo: int = None
@@ -21,18 +17,20 @@ class Song():
         self.duration: float = None
         self.bitrate: int = None
 
-        data = self._read_data(song_filepath)
+        # Load data
+        data = self._read_data(path_obj)
 
         if not data:
-            # generate and save
-            pass
+            self._write_data(path_obj)
 
-    def _read_data(self, song_filepath):
+    def _read_data(self, path_obj):
         """ read filepath key value from managed mem """
-        return self.mem_man.gettr(song_filepath)
+        key = self._normalize_key(path_obj)
+        return self.mem_man.gettr(key)
     
-    def _write_data(self, song_filepath):
+    def _write_data(self, path_obj):
         """ generate and write self in managed mem, key is filepath """
+        key = self._normalize_key(path_obj)
 
         # Required
         self._get_tags()
@@ -42,7 +40,7 @@ class Song():
         # Optional
         self._get_duration()
 
-        self.mem_man.settr(song_filepath, self)
+        self.mem_man.settr(key, self)
 
     def _get_tags(self):
         # read music librarians tag list (use managed mem?)
@@ -59,3 +57,9 @@ class Song():
     def _get_duration(self):
         # use pyaudio to get duration (could be useful for queue operations)
         pass
+
+    @staticmethod
+    def _normalize_key(song_filepath):
+        if isinstance(song_filepath, Path):
+            return str(song_filepath)
+        return str(song_filepath)
