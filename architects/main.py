@@ -13,12 +13,30 @@ import sys
 import threading
 from pathlib import Path
 from typing import Optional
-
 from PyQt6.QtCore import QCoreApplication
 
+# Ensure project root is importable when running the script directly.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from the_listeners import RECORD_SECONDS, RecordingWorker, suppress_alsa_warnings
-from the_listeners.device_helpers import resolve_device_params
+from the_listeners.device_helpers import resolve_device_params, list_all_devices
 from transcribers import WhisperEngine
+
+
+def _print_devices(devices) -> None:
+    print("Detected audio devices:")
+    if not devices:
+        print("  (none)")
+        return
+
+    for dev in devices:
+        name = dev.get("name", "")
+        inputs = dev.get("max_input_channels", 0)
+        outputs = dev.get("max_output_channels", 0)
+        host_api = dev.get("host_api", -1)
+        print(f"  [{dev['index']}] {name} (inputs={inputs}, outputs={outputs}, host_api={host_api})")
 
 
 def _print_selection(params) -> None:
@@ -46,7 +64,11 @@ def _wire_handlers(worker: RecordingWorker, whisper: WhisperEngine) -> None:
         else:
             print("  OTHERS -> skipped")
 
-        _start_transcription(Path(self_path), whisper)
+        # Prefer the speaker/loopback capture for transcription when available.
+        transcription_target = others_path or self_path
+        channel_label = "OTHERS" if others_path else "SELF"
+        print(f"  TRANSCRIBE -> {channel_label}")
+        _start_transcription(Path(transcription_target), whisper)
 
     worker.finished_cycle.connect(on_finished)
 
@@ -69,6 +91,9 @@ def _start_transcription(wav_path: Path, whisper: WhisperEngine) -> None:
 def main() -> None:
     suppress_alsa_warnings()
     app = QCoreApplication(sys.argv)
+
+    devices = list_all_devices()
+    _print_devices(devices)
 
     params = resolve_device_params(RECORD_SECONDS)
     _print_selection(params)
