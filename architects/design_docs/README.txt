@@ -1,0 +1,1 @@
+Design docs images are d&d in Excalidraw, scene included in metadata
