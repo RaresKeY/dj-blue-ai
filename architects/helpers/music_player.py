@@ -115,7 +115,7 @@ def play_music(path, device_pref=None):
 if __name__ == "__main__":
     app = QCoreApplication(sys.argv)
 
-    TEST_MUSIC = "/home/mintmainog/workspace/vs_code_workspace/dj-blue-ai/mood_readers/deep_purple_smoke_on_the_water.wav"
+    TEST_MUSIC = "mood_readers/deep_purple_smoke_on_the_water.wav"
     # Optional: pass a device index or substring (e.g., "analog") as the second CLI arg.
     chosen_device = None
     if len(sys.argv) > 2:
