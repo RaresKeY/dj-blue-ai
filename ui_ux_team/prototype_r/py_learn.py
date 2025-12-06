@@ -244,7 +244,7 @@ class MainUI(QWidget):
         return timeline_box
     
     def play_click(self, file_path="deep_purple_smoke_on_the_water.wav"):
-        self._player = play_music(file_path)
+        self._player = play_music(MainUI.build_path(file_path))
         print("Playing Music")
     
     def build_main_controls(self):
