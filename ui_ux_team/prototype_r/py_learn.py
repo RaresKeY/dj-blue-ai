@@ -1,9 +1,10 @@
 import sys
+import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QFrame, QLabel
 )
-from PySide6.QtGui import QPalette, QColor
+from PySide6.QtGui import QPalette, QColor, QPixmap
 from PySide6.QtWidgets import QSizePolicy, QSpacerItem
 from PySide6.QtCore import Qt
 
@@ -43,14 +44,8 @@ COLOR_BLUE_BIRD      = "#1565C0"   # was: "blue"
 
 # COLOR_BLUE_BIRD      = "blue"     # original
 
-def color_box(color):
-    box = QFrame()
-    box.setAutoFillBackground(True)
-    pal = box.palette()
-    pal.setColor(QPalette.Window, QColor(color))
-    box.setPalette(pal)
-    return box
-
+BASE = os.path.dirname(__file__)
+IMAGE_NOT_FOUND = os.path.join(BASE, "assets/image_not_found_white.png")
 
 class MainUI(QWidget):
     def __init__(self):
@@ -68,14 +63,14 @@ class MainUI(QWidget):
     def build_sidebar(self):
         # depth 1
         # vertical sidebar right side
-        sidebar = color_box(COLOR_SIDEBAR)
+        sidebar = self.color_box(COLOR_SIDEBAR)
 
         layout = QVBoxLayout()
         layout.setContentsMargins(2.5, 7, 2.5, 7)
         layout.setSpacing(10)
 
         # sidebar box widgets depth 2
-        top_boxes = [color_box(COLOR_SIDEBAR_TOP) for _ in range(3)]
+        top_boxes = [self.color_box(COLOR_SIDEBAR_TOP) for _ in range(3)]
         for b in top_boxes:
             b.setMinimumSize(50, 50)
             b.setMaximumSize(50, 50)
@@ -83,7 +78,7 @@ class MainUI(QWidget):
 
         layout.addStretch(1)        # middle stretch
 
-        bottom_boxes = [color_box(COLOR_SIDEBAR_BOTTOM) for _ in range(2)]
+        bottom_boxes = [self.image_box("") for _ in range(2)]
         for b in bottom_boxes:
             b.setMinimumSize(50, 50)
             b.setMaximumSize(50, 50)
@@ -95,19 +90,14 @@ class MainUI(QWidget):
         sidebar.setLayout(layout)
         return sidebar
     
-    def build_main_panel(self):
-        # depth 1
-        l_main = QVBoxLayout()
-        # l_main.setContentsMargins(0, 0, 0, 0)
-        l_main.setSpacing(10)
-
-        # controls + main center depth 2
-        covers = color_box(COLOR_COVERS_BG)
+    def build_cover_images(self):
+        # depth 2
+        covers = self.color_box(COLOR_COVERS_BG)
         covers.setContentsMargins(0, 0, 0, 0)
         covers.setMinimumSize(500, 200)
 
         covers_layout = QHBoxLayout()
-        covers_images = [color_box(COLOR_COVER_IMAGE) for _ in range(3)]
+        covers_images = [self.image_box("") for _ in range(3)]
         for i, b in enumerate(covers_images):
             b.setMinimumSize(50, 50)
             if i in [0, 2]:
@@ -118,49 +108,122 @@ class MainUI(QWidget):
             covers_layout.addWidget(b)
         covers.setLayout(covers_layout)
 
-        l_main.addWidget(covers, alignment=Qt.AlignCenter | Qt.AlignBottom)
+        return covers
 
+    def build_main_timeline(self):
+        timeline_box = self.color_box(COLOR_TIMELINE_BG)
+        timeline_box.setFixedHeight(15)
+
+        return timeline_box
+    
+    def build_main_controls(self):
+        # depth 3
         control_layer = QHBoxLayout()
         control_layer.setContentsMargins(10, 10, 10, 10)
         # control_layer.setSpacing(5)
-        controls = color_box(COLOR_CONTROLS_BG)
+        controls = self.color_box(COLOR_CONTROLS_BG)
         controls.setMaximumHeight(75)
         controls.setLayout(control_layer)
 
-        # actual control widgets depth 3
-        con_widgets = [color_box(COLOR_CONTROL_BTN) for _ in range(3)]
-        for i, b in enumerate(con_widgets):
-            if i in [0, 2]:
-                b.setFixedSize(40, 40)
-            if i == 1:
-                b.setFixedSize(55, 55)
+        prev = self.image_box("assets/prev.png")
+        play = self.image_box("assets/play.png")
+        next = self.image_box("assets/next.png")
 
-            control_layer.addWidget(b, alignment=Qt.AlignHCenter)
+        prev.setFixedSize(30, 30)
+        play.setFixedSize(55, 55)
+        next.setFixedSize(30, 30)
 
+        control_layer.addWidget(prev)
+        # control_layer.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        control_layer.addWidget(play)
+        # control_layer.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        control_layer.addWidget(next)
 
-        orange = color_box(COLOR_BG_MAIN)
-        orange.setLayout(l_main)
+        # # actual control widgets depth 3
+        # con_widgets = [self.color_box(COLOR_CONTROL_BTN) for _ in range(3)]
+        # for i, b in enumerate(con_widgets):
+        #     if i in [0, 2]:
+        #         b.setFixedSize(40, 40)
+        #     if i == 1:
+        #         b.setFixedSize(55, 55)
 
-        bottom_con = color_box(COLOR_BOTTOM_BG)
-        bottom_con_layout = QHBoxLayout()
-        bottom_con.setLayout(bottom_con_layout)
-        blue_bird = color_box(COLOR_BLUE_BIRD)
+        #     control_layer.addWidget(b, alignment=Qt.AlignHCenter)
+
+        return controls
+    
+    def build_blue_bird(self):
+        # depth 3
+        blue_bird = self.image_box("assets/blue_bird.png")
         blue_bird.setFixedSize(70, 70)
 
         right_spacer = QWidget()
         right_spacer.setFixedSize(70, 70)
 
+        return blue_bird, right_spacer
+    
+    def build_main_bottom_panel(self):
+        # depth 2
+        bottom_con = self.color_box(COLOR_BOTTOM_BG)
+        bottom_con_layout = QHBoxLayout()
+        bottom_con.setLayout(bottom_con_layout)
+
+        blue_bird, right_spacer = self.build_blue_bird()
+
+        controls = self.build_main_controls()
+
         bottom_con_layout.addWidget(blue_bird, alignment=Qt.AlignBottom)
         bottom_con_layout.addWidget(controls, alignment=Qt.AlignHCenter | Qt.AlignTop)
         bottom_con_layout.addWidget(right_spacer)
 
-        timeline_box = color_box(COLOR_TIMELINE_BG)
-        timeline_box.setFixedHeight(15)
+        return bottom_con
+    
+    def build_main_panel(self):
+        # depth 1
+        l_main = QVBoxLayout()
+        # l_main.setContentsMargins(0, 0, 0, 0)
+        l_main.setSpacing(10)
 
+        covers = self.build_cover_images()
+        timeline_box = self.build_main_timeline()
+        bottom_panel = self.build_main_bottom_panel()
+
+        l_main.addWidget(covers, alignment=Qt.AlignCenter | Qt.AlignBottom)
         l_main.addWidget(timeline_box)
-        l_main.addWidget(bottom_con)
-        return orange
+        l_main.addWidget(bottom_panel)
 
+        orange = self.color_box(COLOR_BG_MAIN)
+        orange.setLayout(l_main)
+
+        return orange
+    
+    @staticmethod
+    def color_box(color):
+        box = QFrame()
+        box.setAutoFillBackground(True)
+        pal = box.palette()
+        pal.setColor(QPalette.Window, QColor(color))
+        box.setPalette(pal)
+        return box
+    
+    @staticmethod
+    def build_path(file_path):
+        BASE = os.path.dirname(__file__)
+        return os.path.join(BASE, file_path)
+    
+    @staticmethod
+    def image_box(file_path):
+        label = QLabel()
+        label.setScaledContents(True)
+        label.setMinimumSize(50, 50)
+
+        pix = QPixmap(MainUI.build_path(file_path))
+
+        if pix.isNull():
+            label.setPixmap(QPixmap(IMAGE_NOT_FOUND))
+        else:
+            label.setPixmap(pix)
+        
+        return label
 
     def build_main_layout(self):
         # depth 0
@@ -186,5 +249,6 @@ if __name__ == "__main__":
     window.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
 
     window.show()
+    print(QPixmap(IMAGE_NOT_FOUND).isNull())
 
     sys.exit(app.exec())
