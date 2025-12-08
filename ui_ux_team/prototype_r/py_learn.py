@@ -4,9 +4,18 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QFrame, QLabel
 )
-from PySide6.QtGui import QPalette, QColor, QPixmap, QCursor, QTransform, QPainter
-from PySide6.QtWidgets import QGraphicsColorizeEffect, QSizePolicy, QSpacerItem
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve, QRect, Property
+from PySide6.QtGui import (
+    QPalette, QColor, QPixmap, QCursor, QTransform, 
+    QPainter, QFont
+)
+from PySide6.QtWidgets import (
+    QGraphicsColorizeEffect, QSizePolicy, QSpacerItem, 
+    QTextBrowser, QPlainTextEdit, QTextEdit
+)
+from PySide6.QtCore import (
+    Qt, Signal, QPropertyAnimation, QEasingCurve, 
+    QRect, Property
+)
 
 from pathlib import Path
 # Ensure project root is importable when running the script directly.
@@ -59,13 +68,11 @@ IMAGE_NOT_FOUND = os.path.join(BASE, "assets/image_not_found_white.png")
 class ImageButton(QLabel):
     clicked = Signal()
 
-    def __init__(self, path, func=None, size=(40, 40), fallback=None):
+    def __init__(self, path, size=(40, 40), fallback=None):
         super().__init__()
         self.setFixedSize(*size)
         self.setCursor(QCursor(Qt.PointingHandCursor))
         self.setAlignment(Qt.AlignCenter)
-
-        self.action = func
 
         self.HOVER_SCALE = 1.10
         self.PRESS_SCALE = 0.94
@@ -148,8 +155,6 @@ class ImageButton(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.animate_to(self.PRESS_SCALE, fast=True)
-        if self.action:
-            self.action()
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event):
@@ -171,11 +176,221 @@ class ImageButton(QLabel):
         self.anim.start()
 
 
+class TextBoxAI(QPlainTextEdit):
+    def __init__(self):
+        super().__init__()
+
+        self.setObjectName("TextBox") 
+        self.setReadOnly(True)
+
+        # padding + border
+        self.setStyleSheet("""
+            QPlainTextEdit#TextBox {
+                background-color: #0F0F0F;
+                color: #B8B8B8;
+
+                border: 1px solid #2A2D31;
+                border-radius: 10px;
+                padding: 10px;
+
+                font-size: 15px;
+                font-weight: 600;
+                font-family: "Inter", "Segoe UI", "Ubuntu", sans-serif;
+
+                selection-background-color: #3E6AFF;
+            }
+        """)
+
+class TextBox(QPlainTextEdit):
+    def __init__(self):
+        super().__init__()
+
+        self.setObjectName("TextBox") 
+        self.setReadOnly(True)
+
+        # padding + border
+        self.setStyleSheet("""
+            QPlainTextEdit#TextBox {
+                background-color: #0F0F0F;
+                color: #B8B8B8;
+
+                border: 1px solid #2A2D31;
+                border-radius: 10px;
+                padding: 10px;
+
+                font-size: 15px;
+                font-weight: 600;
+                font-family: "Inter", "Segoe UI", "Ubuntu", sans-serif;
+
+                selection-background-color: #3E6AFF;
+            }
+        """)
+
+        self.transcript_index: int = 0
+        self.transcript: list[str] = []
+
+        self._read_transcript()
+        self._display_transcript()
+
+    def _read_transcript(self):
+        pass
+
+    def _display_transcript(self, transcript=None):
+        if transcript:
+            for line in transcript:
+                self.appendPlainText(line)
+                self.transcript_index += 1
+
+        self.appendPlainText("SPEAKER 1: Hello")
+        self.appendPlainText("SPEAKER 2: Hi there.")
+
+
+class TranscriptWindow(QWidget):
+    closed = Signal()
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Transcript")
+
+        layout = QVBoxLayout(self)
+
+        search_bar = SearchBar()
+        text_box = TextBox()
+
+        layout.addWidget(search_bar, 1)
+        layout.addWidget(text_box, 9)
+    
+    def closeEvent(self, event):
+        self.closed.emit()
+        return super().closeEvent(event)
+
+
+class InputBlueBird(QTextEdit):
+    message_sent = Signal(str)
+
+    def __init__(self, text_box):
+        super().__init__()
+
+        self.style_settings()
+        self.text_box: TextBoxAI = text_box
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Return and not e.modifiers():
+            self.send_message()
+            return
+        return super().keyPressEvent(e)
+
+    def send_message(self):
+        text = self.toPlainText().strip()
+        if not text:
+            return
+        
+        self.clear()
+        self.message_sent.emit(text)
+
+    def style_settings(self):
+        self.setObjectName("InputChat")
+
+        font = QFont()
+        font.setPointSize(13)
+        self.setFont(font)
+
+        self.setFixedHeight(70)
+        self.setPlaceholderText("Type a message to BlueBird AI")
+
+        # padding + border
+        self.setStyleSheet("""
+            QTextEdit#InputChat {
+                background-color: #161616;
+                color: #E6E6E6;
+
+                border: 1px solid #2A2D31;
+                border-radius: 10px;
+                padding: 10px;
+
+                font-size: 15px;
+                font-family: "Inter", "Segoe UI", "Ubuntu", sans-serif;
+
+                selection-background-color: #3E6AFF;
+            }
+        """)
+
+class SearchBar(QTextEdit):
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("SearchBar")
+
+        self.setFixedHeight(48)
+        self.setPlaceholderText("Search transcript...")
+
+        self.setFont(QFont("Inter", 13))
+
+        self.setStyleSheet("""
+            QTextEdit#SearchBar {
+                background-color: #161616;          
+                color: #D0D0D0;
+
+                border: 1px solid #303236;
+                border-radius: 8px;
+                padding: 10px 14px;
+
+                font-size: 14px;
+                font-family: "Inter", "Segoe UI", "Ubuntu", sans-serif;
+
+                selection-background-color: #4A78FF;
+                selection-color: black;
+            }
+
+            /* Optional subtle inset focus ring */
+            QTextEdit#SearchBar:focus {
+                border: 3px solid #4A78FF;
+                background-color: #1A1A1A;
+            }
+        """)
+
+class BlueBirdChat(QWidget):
+    closed = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("BlueBird AI")
+
+        self.text_box = None
+        self.root_layout = self.build_layout()
+
+    def closeEvent(self, event):
+        self.closed.emit()
+        return super().closeEvent(event)
+    
+    def handle_message(self, text: str):
+        """Receive text from input widget and append to the chat box."""
+        print("SENT:", text)
+        self.text_box.appendPlainText(text)
+
+    def build_layout(self):
+        layout = QVBoxLayout(self)
+
+        self.text_box = TextBoxAI()
+
+        user_input_layout = QHBoxLayout()
+        
+        user_input = InputBlueBird(self.text_box)
+        user_input.message_sent.connect(self.handle_message)
+
+        send_button = MainUI.button(size=(70, 70))
+        send_button.clicked.connect(user_input.send_message)
+
+        user_input_layout.addWidget(user_input)
+        user_input_layout.addWidget(send_button)
+
+        layout.addWidget(self.text_box, 9)
+        layout.addLayout(user_input_layout, 1)
+
+
 class MainUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Testing Site")
-        self.move(1940, 30)
+        self.move(3330, 30)
         self.resize(721, 487)
 
         self.root = QVBoxLayout(self)
@@ -186,6 +401,30 @@ class MainUI(QWidget):
 
         # music player
         self._payer = None
+
+        # extra side windows
+        self._transcript_win = None
+        self._bluebird_chat = None
+
+    def open_transcript(self):
+        if self._transcript_win is None:
+            self._transcript_win = TranscriptWindow()
+
+            # connect x to MainUi attr
+            self._transcript_win.closed.connect(
+                lambda: setattr(self, "_transcript_win", None)
+            )
+
+            x = self.x() + self.width()
+            y = self.y()
+            self._transcript_win.move(x + 10, y)
+            self._transcript_win.resize(400, self.height())
+
+            self._transcript_win.show()
+            return
+
+        self._transcript_win.close()
+        self._transcript_win = None
 
     def build_sidebar(self):
         # depth 1
@@ -203,9 +442,13 @@ class MainUI(QWidget):
             b.setMaximumSize(50, 50)
             layout.addWidget(b, alignment=Qt.AlignHCenter)
 
-        layout.addStretch(1)        # middle stretch
+        layout.addStretch(1)    # middle stretch
 
-        bottom_boxes = [self.image_box("") for _ in range(2)]
+        transcript_button = self.button("assets/transcript_pink.png", size=(55, 55))
+        transcript_button.clicked.connect(self.open_transcript)
+        layout.addWidget(transcript_button, alignment=Qt.AlignHCenter)
+
+        bottom_boxes = [self.image_box("") for _ in range(1)]
         for b in bottom_boxes:
             b.setMinimumSize(50, 50)
             b.setMaximumSize(50, 50)
@@ -257,7 +500,8 @@ class MainUI(QWidget):
         controls.setLayout(control_layer)
 
         prev = self.button("assets/prev.png", size=(30, 30))
-        play = self.button("assets/play.png", size=(55, 55), func=self.play_click)
+        play = self.button("assets/play.png", size=(55, 55))
+        play.clicked.connect(self.play_click)
         next = self.button("assets/next.png", size=(30, 30))
 
         # prev.setFixedSize(30, 30)
@@ -282,12 +526,30 @@ class MainUI(QWidget):
 
         return controls
     
-    def blue_bird_click(self):
+    def open_bluebird_chat(self):
         print("Blue Bird")
+        if self._bluebird_chat is None:
+            self._bluebird_chat = BlueBirdChat()
+
+            self._bluebird_chat.closed.connect(
+                lambda: setattr(self, "_bluebird_chat", None))
+
+            x = self.x() - 400
+            y = self.y()
+            self._bluebird_chat.move(x - 10, y)
+            self._bluebird_chat.resize(400, self.height())
+
+            self._bluebird_chat.show()
+            return
+
+        self._bluebird_chat.close()
+        self._bluebird_chat = None
+
     
     def build_blue_bird(self):
         # depth 3
-        blue_bird = self.button("assets/blue_bird.png", size=(70, 70), func=self.blue_bird_click)
+        blue_bird = self.button("assets/blue_bird.png", size=(70, 70))
+        blue_bird.clicked.connect(self.open_bluebird_chat)
         # blue_bird.setFixedSize(70, 70)
 
         right_spacer = QWidget()
@@ -345,8 +607,12 @@ class MainUI(QWidget):
         return os.path.join(BASE, file_path)
     
     @staticmethod
-    def button(file_path, func=None, size=(40, 40)):
-        button = ImageButton(path=MainUI.build_path(file_path), func=func, size=size, fallback=IMAGE_NOT_FOUND)
+    def button(file_path="", size=(40, 40)):
+        button = ImageButton(
+            path=MainUI.build_path(file_path), 
+            size=size, 
+            fallback=IMAGE_NOT_FOUND
+            )
 
         return button
     
