@@ -8,7 +8,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 # to run
-# QT_QPA_PLATFORM=xcb python3 autoreload.py py_learn.py 
+# QT_QPA_PLATFORM=xcb python3 autoreload.py py_learn.py
 
 WATCH_EXT = (".py",)
 DEBOUNCE_DELAY = 0.3
