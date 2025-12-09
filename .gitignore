@@ -28,3 +28,7 @@ dist-ssr
 
 # Managed Mem
 managed_mem.json
+
+# Extra
+ui_ux_team/prototype_r/assets_d
+ui_ux_team/prototype_r/button_test.py
