@@ -1,12 +1,49 @@
+import json
+import mimetypes
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import google.generativeai as genai
 import numpy as np
-from typing import List, Union, Dict
+
+DEFAULT_TRANSCRIPTION_PROMPT = """
+Process the audio file and generate a detailed transcription.
+
+Requirements:
+1. Identify distinct speakers (e.g., Speaker 1, Speaker 2, or names if context allows).
+2. Provide accurate timestamps for each segment (Format: MM:SS).
+3. Detect the primary language of each segment.
+4. If the segment is in a language different than English, also provide the English translation.
+5. Identify the primary emotion of the speaker in this segment. You MUST choose exactly one of the following: Happy, Sad, Angry, Neutral.
+6. Provide a brief summary of the entire audio at the beginning.
+
+Respond ONLY as JSON matching:
+{
+  "summary": "string",
+  "segments": [
+    {
+      "speaker": "string",
+      "timestamp": "MM:SS",
+      "content": "string",
+      "language": "string",
+      "language_code": "string",
+      "translation": "string",
+      "emotion": "happy|sad|angry|neutral"
+    }
+  ]
+}
+""".strip()
+
+# Gemini inline audio limit is 20 MB; larger files should be uploaded first.
+INLINE_AUDIO_LIMIT_BYTES = 20 * 1024 * 1024
+
 
 class LLMUtilitySuite:
     """
     A singleton class to manage interactions with a Large Language Model API.
     This suite handles API configuration, text generation (with system prompts),
-    chat sessions, and text embeddings.
+    chat sessions, text embeddings, and audio transcription.
     """
     _instance = None
 
@@ -28,7 +65,7 @@ class LLMUtilitySuite:
         if not hasattr(self, 'is_initialized'):
             if api_key is None:
                 raise ValueError("API key is required for the first initialization.")
-            
+
             try:
                 genai.configure(api_key=api_key)
                 print("LLM API Suite configured successfully.")
@@ -167,6 +204,299 @@ class LLMUtilitySuite:
         except Exception as e:
             print(f"An error occurred during batch embedding: {e}")
             return []
+
+    # --- TRANSCRIPTION METHODS ---
+
+    def transcribe_audio(
+        self,
+        audio_source: Union[str, Path, bytes],
+        *,
+        model_name: str = "models/gemini-2.5-flash",
+        prompt: Optional[str] = None,
+        mime_type: Optional[str] = None,
+        structured: bool = True,
+        upload_when_large: bool = True,
+        upload_threshold_bytes: int = INLINE_AUDIO_LIMIT_BYTES,
+        wait_for_active_sec: int = 60,
+    ) -> Dict[str, Any]:
+        """
+        Transcribes audio using the Gemini API and returns structured details when possible.
+
+        Args:
+            audio_source: Path to an audio file or raw audio bytes.
+            model_name: Gemini model to use for transcription.
+            prompt: Optional custom prompt; defaults to a detailed transcription prompt.
+            mime_type: MIME type for raw bytes; guessed from file name when using paths.
+            structured: When True, request JSON with summary/segments; falls back to text on failure.
+            upload_when_large: Uploads files that exceed the inline size cap.
+            upload_threshold_bytes: Inline audio byte ceiling before forcing upload.
+            wait_for_active_sec: Seconds to wait for an uploaded file to become ACTIVE.
+
+        Returns:
+            A dict containing transcript text, optional summary and segments, and the raw response.
+        """
+        prompt = prompt or DEFAULT_TRANSCRIPTION_PROMPT
+        audio_part, source = self._prepare_audio_part(
+            audio_source,
+            mime_type=mime_type,
+            upload_when_large=upload_when_large,
+            upload_threshold_bytes=upload_threshold_bytes,
+            wait_for_active_sec=wait_for_active_sec,
+        )
+
+        generation_config = None
+        schema = self._default_transcription_schema() if structured else None
+        if schema is not None:
+            generation_config = self._build_generation_config(schema)
+
+        try:
+            normalized_model = self._normalize_model_name(model_name)
+            model = genai.GenerativeModel(normalized_model)
+            response = model.generate_content(
+                contents=[prompt, audio_part],
+                generation_config=generation_config,
+            )
+        except Exception as e:
+            return {
+                "error": f"An error occurred during transcription: {e}",
+                "source": source,
+                "model": model_name,
+            }
+
+        parsed = self._maybe_parse_structured_response(response, structured)
+        segments = parsed.get("segments", []) if parsed else []
+        transcript_text = self._segments_to_text(segments) if segments else self._extract_text(response)
+        primary_emotion = parsed.get("emotion") if parsed else None
+        if not primary_emotion and segments:
+            primary_emotion = segments[0].get("emotion")
+
+        return {
+            "text": transcript_text.strip(),
+            "summary": parsed.get("summary") if parsed else None,
+            "segments": segments,
+            "emotion": primary_emotion,
+            "raw_response": response,
+            "source": source,
+            "model": model_name,
+        }
+
+    @staticmethod
+    def _segments_to_text(segments: List[Dict[str, Any]]) -> str:
+        return " ".join(seg.get("content", "").strip() for seg in segments if seg.get("content")).strip()
+
+    @staticmethod
+    def _extract_text(response: Any) -> str:
+        """
+        Robustly extract text from a Gemini response, even when .text is None.
+        """
+        text = getattr(response, "text", None)
+        if text:
+            return text
+
+        candidates = getattr(response, "candidates", None) or []
+        parts: List[str] = []
+        for cand in candidates:
+            content = getattr(cand, "content", None)
+            if not content:
+                continue
+            for part in getattr(content, "parts", []) or []:
+                part_text = getattr(part, "text", None)
+                if part_text:
+                    parts.append(part_text)
+                    continue
+                part_json = getattr(part, "json", None)
+                if part_json is not None:
+                    try:
+                        parts.append(json.dumps(part_json))
+                    except Exception:
+                        continue
+        return " ".join(parts).strip()
+
+    @staticmethod
+    def _build_generation_config(response_schema) -> Optional[Any]:
+        candidates = [
+            getattr(genai, "GenerationConfig", None),
+            getattr(getattr(genai, "types", None), "GenerationConfig", None),
+        ]
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            try:
+                return candidate(
+                    response_mime_type="application/json",
+                    response_schema=response_schema,
+                )
+            except Exception:
+                continue
+        return None
+
+    @staticmethod
+    def _default_transcription_schema():
+        try:
+            schema_cls = genai.types.Schema
+            type_enum = genai.types.Type
+        except Exception:
+            return None
+
+        return schema_cls(
+            type=type_enum.OBJECT,
+            properties={
+                "summary": schema_cls(
+                    type=type_enum.STRING,
+                    description="A concise summary of the audio content.",
+                ),
+                "segments": schema_cls(
+                    type=type_enum.ARRAY,
+                    description="List of transcribed segments with speaker and timestamp.",
+                    items=schema_cls(
+                        type=type_enum.OBJECT,
+                        properties={
+                            "speaker": schema_cls(type=type_enum.STRING),
+                            "timestamp": schema_cls(type=type_enum.STRING),
+                            "content": schema_cls(type=type_enum.STRING),
+                            "language": schema_cls(type=type_enum.STRING),
+                            "language_code": schema_cls(type=type_enum.STRING),
+                            "translation": schema_cls(type=type_enum.STRING),
+                            "emotion": schema_cls(
+                                type=type_enum.STRING,
+                                enum=["happy", "sad", "angry", "neutral"],
+                            ),
+                        },
+                        required=["speaker", "timestamp", "content", "language", "language_code", "emotion"],
+                    ),
+                ),
+            },
+            required=["summary", "segments"],
+        )
+
+    @staticmethod
+    def _maybe_parse_structured_response(response: Any, structured_requested: bool) -> Dict[str, Any]:
+        if not structured_requested:
+            return {}
+        candidates: List[str] = []
+        top_text = getattr(response, "text", None)
+        if top_text:
+            candidates.append(top_text)
+
+        for cand in getattr(response, "candidates", []) or []:
+            content = getattr(cand, "content", None)
+            if not content:
+                continue
+            for part in getattr(content, "parts", []) or []:
+                part_text = getattr(part, "text", None)
+                if part_text:
+                    candidates.append(part_text)
+                    continue
+                part_json = getattr(part, "json", None)
+                if part_json is not None:
+                    try:
+                        candidates.append(json.dumps(part_json))
+                    except Exception:
+                        continue
+
+        for raw in candidates:
+            stripped = LLMUtilitySuite._strip_code_fences(raw)
+            try:
+                payload = json.loads(stripped)
+                return LLMUtilitySuite._normalize_transcription_payload(payload)
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return {}
+
+    @staticmethod
+    def _strip_code_fences(text: str) -> str:
+        """
+        Remove leading/trailing markdown code fences to recover JSON.
+        """
+        trimmed = text.strip()
+        if trimmed.startswith("```"):
+            # Drop first fence line
+            parts = trimmed.splitlines()
+            # Remove first line and any trailing fence line
+            if parts:
+                parts = parts[1:]
+            if parts and parts[-1].strip().startswith("```"):
+                parts = parts[:-1]
+            trimmed = "\n".join(parts).strip()
+        return trimmed
+
+    @staticmethod
+    def _normalize_transcription_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Normalize casing/fields in transcription payload.
+        """
+        segments = payload.get("segments") or []
+        normalized_segments = []
+        for seg in segments:
+            emotion = seg.get("emotion")
+            if isinstance(emotion, str):
+                seg = {**seg, "emotion": emotion.lower()}
+            normalized_segments.append(seg)
+        if segments:
+            payload = {**payload, "segments": normalized_segments}
+        return payload
+
+    @staticmethod
+    def _normalize_model_name(model_name: str) -> str:
+        """
+        Ensure we pass fully-qualified model IDs (e.g., models/gemini-2.5-flash).
+        """
+        if model_name.startswith("models/"):
+            return model_name
+        return f"models/{model_name}"
+
+    def _prepare_audio_part(
+        self,
+        audio_source: Union[str, Path, bytes],
+        *,
+        mime_type: Optional[str],
+        upload_when_large: bool,
+        upload_threshold_bytes: int,
+        wait_for_active_sec: int,
+    ) -> Tuple[Any, str]:
+        if isinstance(audio_source, bytes):
+            if not mime_type:
+                raise ValueError("mime_type is required when passing raw audio bytes.")
+            return {"mime_type": mime_type, "data": audio_source}, "inline-bytes"
+
+        path = Path(audio_source)
+        if not path.exists():
+            raise FileNotFoundError(f"Audio file not found: {path}")
+
+        audio_bytes = path.read_bytes()
+        guessed_mime = mime_type or mimetypes.guess_type(path.name)[0] or "audio/wav"
+
+        if upload_when_large and len(audio_bytes) > upload_threshold_bytes:
+            uploaded = genai.upload_file(path=str(path))
+            ready = self._wait_for_file_active(uploaded, wait_for_active_sec)
+            return ready, str(path)
+
+        return LLMUtilitySuite._make_audio_part(guessed_mime, audio_bytes), str(path)
+
+    @staticmethod
+    def _make_audio_part(mime_type: str, audio_bytes: bytes) -> Any:
+        try:
+            part_cls = getattr(getattr(genai, "types", None), "Part", None)
+            if part_cls:
+                return part_cls.from_bytes(data=audio_bytes, mime_type=mime_type)
+        except Exception:
+            pass
+        return {"mime_type": mime_type, "data": audio_bytes}
+
+    @staticmethod
+    def _wait_for_file_active(uploaded_file: Any, timeout_sec: int) -> Any:
+        deadline = time.time() + timeout_sec
+        current = uploaded_file
+        while time.time() < deadline:
+            state = getattr(current, "state", None)
+            if state is None or state == "ACTIVE":
+                return current
+            time.sleep(2)
+            try:
+                current = genai.get_file(current.name)
+            except Exception:
+                break
+        return current
 
     # --- UTILITY METHOD ---
 
