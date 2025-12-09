@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import (
     QPalette, QColor, QPixmap, QCursor, QTransform, 
-    QPainter, QFont
+    QPainter, QFont, QPainterPath, QRegion
 )
 from PySide6.QtWidgets import (
     QGraphicsColorizeEffect, QSizePolicy, QSpacerItem, 
@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import (
     Qt, Signal, QPropertyAnimation, QEasingCurve, 
-    QRect, Property
+    QRect, Property, QRect
 )
 
 from pathlib import Path
@@ -201,6 +201,65 @@ class TextBoxAI(QPlainTextEdit):
             }
         """)
 
+
+class FloatingMenu(QWidget):
+    closed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setObjectName("PopupMenu")
+        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        labels = [
+            QLabel("💼 Work"),
+            QLabel("🎉 Party"),
+            QLabel("🎮 Gaming")
+        ]
+
+        container = QWidget(self)
+        container.setObjectName("PopupInner")
+
+        layout = QVBoxLayout(container)
+
+        self.setLayout(QVBoxLayout())
+        self.layout().addWidget(container)
+
+        font = QFont("Inter")
+        font.setWeight(QFont.Normal)
+
+        for lbl in labels:
+            lbl.setFont(font)
+            layout.addWidget(lbl)
+
+        self.setStyleSheet("""
+            QWidget#PopupInner {
+                background-color: rgba(15, 15, 15, 235);      /* darker, cleaner */
+                border-radius: 14px;
+                padding: 8px;
+            }
+
+            QLabel {
+                background-color: rgba(40, 40, 40, 200);       /* smoother card look */
+                border: 1px solid rgba(255, 255, 255, 25);     /* subtle border */
+                border-radius: 10px;
+                font-size: 20px;
+                padding: 10px 14px;
+                color: #F3F3F3;                                /* cleaner white */
+            }
+
+            QLabel:hover {
+                background-color: rgba(50, 50, 50, 220);       /* brighter on hover */
+                border: 1px solid rgba(255, 255, 255, 45);     /* pop highlight */
+            }
+        """)
+
+    def closeEvent(self, event):
+        self.closed.emit()
+        return super().closeEvent(event)
+
+
 class TextBox(QPlainTextEdit):
     def __init__(self):
         super().__init__()
@@ -314,6 +373,7 @@ class InputBlueBird(QTextEdit):
             }
         """)
 
+
 class SearchBar(QTextEdit):
     def __init__(self):
         super().__init__()
@@ -342,10 +402,11 @@ class SearchBar(QTextEdit):
 
             /* Optional subtle inset focus ring */
             QTextEdit#SearchBar:focus {
-                border: 3px solid #4A78FF;
+                border: 2px solid #ff7139;
                 background-color: #1A1A1A;
             }
         """)
+
 
 class BlueBirdChat(QWidget):
     closed = Signal()
@@ -360,7 +421,7 @@ class BlueBirdChat(QWidget):
     def closeEvent(self, event):
         self.closed.emit()
         return super().closeEvent(event)
-    
+
     def handle_message(self, text: str):
         """Receive text from input widget and append to the chat box."""
         print("SENT:", text)
@@ -372,11 +433,11 @@ class BlueBirdChat(QWidget):
         self.text_box = TextBoxAI()
 
         user_input_layout = QHBoxLayout()
-        
+
         user_input = InputBlueBird(self.text_box)
         user_input.message_sent.connect(self.handle_message)
 
-        send_button = MainUI.button(size=(70, 70))
+        send_button = MainUI.button("assets/send_black.png", size=(63, 63))
         send_button.clicked.connect(user_input.send_message)
 
         user_input_layout.addWidget(user_input)
@@ -403,6 +464,7 @@ class MainUI(QWidget):
         self._payer = None
 
         # extra side windows
+        self._meet_type = None
         self._transcript_win = None
         self._bluebird_chat = None
 
@@ -426,6 +488,26 @@ class MainUI(QWidget):
         self._transcript_win.close()
         self._transcript_win = None
 
+    def meet_type_menu(self, parent):
+        if self._meet_type is None:
+            self._meet_type = FloatingMenu(parent)
+
+            global_pos = parent.mapToGlobal(parent.rect().bottomLeft())
+            self._meet_type.move(global_pos.x(), global_pos.y())
+            self._meet_type.show()
+
+            # connect close event
+            self._meet_type.closed.connect(
+                lambda: setattr(self, "_meet_type", None)
+            )
+
+            # close handler
+            self._meet_type.destroyed.connect(lambda: setattr(self, "_meet_type", None))
+            return
+
+        self._meet_type.close()
+        self._meet_type = None
+
     def build_sidebar(self):
         # depth 1
         # vertical sidebar right side
@@ -435,25 +517,40 @@ class MainUI(QWidget):
         layout.setContentsMargins(2.5, 7, 2.5, 7)
         layout.setSpacing(10)
 
-        # sidebar box widgets depth 2
-        top_boxes = [self.color_box(COLOR_SIDEBAR_TOP) for _ in range(3)]
-        for b in top_boxes:
-            b.setMinimumSize(50, 50)
-            b.setMaximumSize(50, 50)
-            layout.addWidget(b, alignment=Qt.AlignHCenter)
+        #sidebar buttons depth 2
+
+        # user
+        user_button = self.button("assets/user_black.png", size=(60, 60))
+        layout.addWidget(user_button, alignment=Qt.AlignHCenter)
+
+        # api connector
+        api_button = self.button("assets/api_black.png", size=(50, 50))
+        layout.addWidget(api_button, alignment=Qt.AlignHCenter)
+
+        # info/dark/light theme
+        info_button = self.button("assets/info.png", size=(50, 50))
+        layout.addWidget(info_button, alignment=Qt.AlignHCenter)
+
+        meet_type = self.button("assets/meet_type_black.png", size=(50, 50))
+        meet_type.clicked.connect(lambda :self.meet_type_menu(meet_type))
+        layout.addWidget(meet_type, alignment=Qt.AlignHCenter)
 
         layout.addStretch(1)    # middle stretch
 
-        transcript_button = self.button("assets/transcript_pink.png", size=(55, 55))
+        # transcript button
+        transcript_button = self.button("assets/transcript_black.png", size=(60, 60))
         transcript_button.clicked.connect(self.open_transcript)
         layout.addWidget(transcript_button, alignment=Qt.AlignHCenter)
 
-        bottom_boxes = [self.image_box("") for _ in range(1)]
-        for b in bottom_boxes:
-            b.setMinimumSize(50, 50)
-            b.setMaximumSize(50, 50)
-            layout.addWidget(b, alignment=Qt.AlignHCenter)
+        # settings
+        settings_button = self.button("assets/settings_black.png", size=(50, 50))
+        layout.addWidget(settings_button, alignment=Qt.AlignHCenter)
 
+        # bottom_boxes = [self.image_box("") for _ in range(1)]
+        # for b in bottom_boxes:
+        #     b.setMinimumSize(50, 50)
+        #     b.setMaximumSize(50, 50)
+        #     layout.addWidget(b, alignment=Qt.AlignHCenter)
 
         sidebar.setMinimumWidth(70)
         sidebar.setMaximumWidth(70)
@@ -496,33 +593,19 @@ class MainUI(QWidget):
         control_layer.setContentsMargins(10, 10, 10, 10)
         # control_layer.setSpacing(5)
         controls = self.color_box(COLOR_CONTROLS_BG)
-        controls.setMaximumHeight(75)
+        controls.setMaximumHeight(100)
         controls.setLayout(control_layer)
 
-        prev = self.button("assets/prev.png", size=(30, 30))
-        play = self.button("assets/play.png", size=(55, 55))
+        prev = self.button("assets/prev.png", size=(35, 35))
+        play = self.button("assets/play.png", size=(80, 80))
         play.clicked.connect(self.play_click)
-        next = self.button("assets/next.png", size=(30, 30))
-
-        # prev.setFixedSize(30, 30)
-        # play.setFixedSize(55, 55)
-        # next.setFixedSize(30, 30)
+        next = self.button("assets/next.png", size=(35, 35))
 
         control_layer.addWidget(prev)
         # control_layer.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
         control_layer.addWidget(play)
         # control_layer.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
         control_layer.addWidget(next)
-
-        # # actual control widgets depth 3
-        # con_widgets = [self.color_box(COLOR_CONTROL_BTN) for _ in range(3)]
-        # for i, b in enumerate(con_widgets):
-        #     if i in [0, 2]:
-        #         b.setFixedSize(40, 40)
-        #     if i == 1:
-        #         b.setFixedSize(55, 55)
-
-        #     control_layer.addWidget(b, alignment=Qt.AlignHCenter)
 
         return controls
     
@@ -646,6 +729,7 @@ class MainUI(QWidget):
         h_widget = QWidget()
         h_widget.setLayout(h)
         return h_widget
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
