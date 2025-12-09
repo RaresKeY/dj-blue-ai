@@ -14,6 +14,7 @@ from .the_transcribers import (
     run_ffmpeg_wav16k,
     export_srt,
 )
+from .ai_studio_transcriber import AIStudioTranscriber
 
 __all__ = [
     "WhisperEngine",
@@ -23,4 +24,5 @@ __all__ = [
     "sanitize_filename",
     "run_ffmpeg_wav16k",
     "export_srt",
+    "AIStudioTranscriber",
 ]
