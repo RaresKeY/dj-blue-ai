@@ -9,9 +9,10 @@ with ManagedMem() as mem:
     read_value = mem.gettr("key")
 """
 
+import os
 import ast
 import json
-import os
+import time
 import queue
 import threading
 from datetime import datetime
@@ -77,6 +78,12 @@ class ManagedMem:
             cls._instance._context_stack = []
             cls._instance._load()
         return cls._instance
+    
+    def timestamp_helper(self):
+        ts = time.time()
+        readable = time.strftime("%Y-%m-%d %H:%M:%S+00:00", time.gmtime(ts))
+
+        return readable
 
     def set_auto_flush(self, enabled: bool) -> None:
         """Enable or disable automatic flushing after mutations."""
