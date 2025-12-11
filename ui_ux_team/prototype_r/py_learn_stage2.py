@@ -14,94 +14,106 @@ def color_box(color):
     box.setPalette(pal)
     return box
 
-app = QApplication(sys.argv)
 
-root = QVBoxLayout()
+class MainUI(QWidget):
+    def __init__(self):
+        super().__init__()
 
-# vetical sidebar depth 1
-purple = color_box("purple")
+        self.setWindowTitle("Testing Site")
+        self.move(2000, 100)
+        self.resize(420, 230)
 
-sidebar_r = QVBoxLayout()
-sidebar_r.setContentsMargins(2.5, 7, 2.5, 7)
-sidebar_r.setSpacing(10)
+        self.root = QVBoxLayout(self)
+        self.root.setContentsMargins(0, 0, 0, 0)
 
-# sidebar box widgets depth 2
-top_boxes = [color_box("gray") for _ in range(3)]
-for b in top_boxes:
-    b.setMinimumSize(50, 50)
-    b.setMaximumSize(50, 50)
-    sidebar_r.addWidget(b, alignment=Qt.AlignHCenter)
+        ui = self.build_main_layout()
 
-sidebar_r.addStretch(1)        # bottom stretch
-
-bottom_boxes = [color_box("red") for _ in range(2)]
-for b in bottom_boxes:
-    b.setMinimumSize(50, 50)
-    b.setMaximumSize(50, 50)
-    sidebar_r.addWidget(b, alignment=Qt.AlignHCenter)
+        self.setLayout(self.root)
 
 
-purple.setMinimumWidth(55)
-purple.setMaximumWidth(70)
-purple.setLayout(sidebar_r)
+    def build_main_layout(self):
 
-# main screen depth 1
-l_main = QVBoxLayout()
-# l_main.setContentsMargins(0, 0, 0, 0)
-l_main.setSpacing(50)
+        # vetical sidebar depth 1
+        purple = color_box("purple")
 
-# controls + main center depth 2
-covers = color_box("cyan")
-l_main.addWidget(covers, 100)
+        sidebar_r = QVBoxLayout()
+        sidebar_r.setContentsMargins(2.5, 7, 2.5, 7)
+        sidebar_r.setSpacing(10)
 
-l_main.addStretch(1)
+        # sidebar box widgets depth 2
+        top_boxes = [color_box("gray") for _ in range(3)]
+        for b in top_boxes:
+            b.setMinimumSize(50, 50)
+            b.setMaximumSize(50, 50)
+            sidebar_r.addWidget(b, alignment=Qt.AlignHCenter)
 
-control_layer = QHBoxLayout()
-controls = color_box("pink")
-controls.setMaximumSize(200, 70)
-controls.setMinimumSize(200, 70)
-controls.setLayout(control_layer)
+        sidebar_r.addStretch(1)        # bottom stretch
 
-# actual control widgets depth 3
-con_widgets = [color_box("purple") for _ in range(3)]
-for b in con_widgets:
-    b.setMinimumSize(50, 50)
-    b.setMaximumSize(50, 50)
-    control_layer.addWidget(b, alignment=Qt.AlignHCenter)
-
-l_main.addWidget(controls, alignment=Qt.AlignHCenter)
-
-orange = color_box("orange")
-orange.setLayout(l_main)
-
-# center piece sidebar depth 2
-c_piece = color_box("cyan")
+        bottom_boxes = [color_box("red") for _ in range(2)]
+        for b in bottom_boxes:
+            b.setMinimumSize(50, 50)
+            b.setMaximumSize(50, 50)
+            sidebar_r.addWidget(b, alignment=Qt.AlignHCenter)
 
 
-# horizontal depth 0
-hbox = QHBoxLayout()
-hbox.addWidget(orange, 4)
-hbox.addWidget(purple, 1)
-hbox.setContentsMargins(0, 0, 0, 0)
-hbox.setSpacing(0)
+        purple.setMinimumWidth(55)
+        purple.setMaximumWidth(70)
+        purple.setLayout(sidebar_r)
+
+        # main screen depth 1
+        l_main = QVBoxLayout()
+        # l_main.setContentsMargins(0, 0, 0, 0)
+        l_main.setSpacing(50)
+
+        # controls + main center depth 2
+        covers = color_box("cyan")
+        l_main.addWidget(covers, 100)
+
+        l_main.addStretch(1)
+
+        control_layer = QHBoxLayout()
+        controls = color_box("pink")
+        controls.setMaximumSize(200, 70)
+        controls.setMinimumSize(200, 70)
+        controls.setLayout(control_layer)
+
+        # actual control widgets depth 3
+        con_widgets = [color_box("purple") for _ in range(3)]
+        for b in con_widgets:
+            b.setMinimumSize(50, 50)
+            b.setMaximumSize(50, 50)
+            control_layer.addWidget(b, alignment=Qt.AlignHCenter)
+
+        l_main.addWidget(controls, alignment=Qt.AlignHCenter)
+
+        orange = color_box("orange")
+        orange.setLayout(l_main)
+
+        # center piece sidebar depth 2
+        c_piece = color_box("cyan")
 
 
-h_widget = QWidget()
-h_widget.setLayout(hbox)
+        # horizontal depth 0
+        hbox = QHBoxLayout()
+        hbox.addWidget(orange, 4)
+        hbox.addWidget(purple, 1)
+        hbox.setContentsMargins(0, 0, 0, 0)
+        hbox.setSpacing(0)
 
-root.addWidget(h_widget)
-root.setContentsMargins(0, 0, 0, 0)
 
-window = QWidget()
-window.setWindowTitle("Testing Site")
-window.move(2000, 100)
-window.resize(420, 230)
+        h_widget = QWidget()
+        h_widget.setLayout(hbox)
 
-window.setLayout(root)
+        self.root.addWidget(h_widget)
+        self.root.setContentsMargins(0, 0, 0, 0)
 
-# makes it not steal focus
-window.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
 
-window.show()
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainUI()
 
-sys.exit(app.exec())
+    # makes it not steal focus
+    window.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
+
+    window.show()
+    sys.exit(app.exec())

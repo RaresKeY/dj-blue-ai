@@ -7,6 +7,27 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import google.generativeai as genai
 import numpy as np
 
+MEET_TYPE_MOODS = "positive|neutral|tense|unfocused|collaborative|creative|unproductive"
+
+CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE = f"""
+Process the audio file and generate a detailed transcription.
+
+Requirements:
+1. Detect the primary language.
+2. If the recording is in a language different than English, also provide the English translation.
+3. Identify the primary emotion of the speaker in this recording. You MUST choose exactly one of the following: {MEET_TYPE_MOODS}.
+4. Provide a brief summary of the entire audio at the beginning.
+
+Respond ONLY as JSON matching:
+{{
+  "summary": "string",
+  "content": "string",
+  "translation": "string|None",
+  "language_code": "string",
+  "emotion": "{MEET_TYPE_MOODS}"
+}}
+""".strip()
+
 DEFAULT_TRANSCRIPTION_PROMPT = """
 Process the audio file and generate a detailed transcription.
 
@@ -235,7 +256,7 @@ class LLMUtilitySuite:
         Returns:
             A dict containing transcript text, optional summary and segments, and the raw response.
         """
-        prompt = prompt or DEFAULT_TRANSCRIPTION_PROMPT
+        prompt = prompt or CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE
         audio_part, source = self._prepare_audio_part(
             audio_source,
             mime_type=mime_type,
@@ -245,7 +266,7 @@ class LLMUtilitySuite:
         )
 
         generation_config = None
-        schema = self._default_transcription_schema() if structured else None
+        schema = self._transcription_schema_for_prompt(prompt) if structured else None
         if schema is not None:
             generation_config = self._build_generation_config(schema)
 
@@ -264,8 +285,78 @@ class LLMUtilitySuite:
             }
 
         parsed = self._maybe_parse_structured_response(response, structured)
+        transcript_text = None
+        if parsed:
+            transcript_text = parsed.get("content")
+        primary_emotion = parsed.get("emotion") if parsed else None
+
+        return {
+            "text": transcript_text.strip(),
+            "summary": parsed.get("summary") if parsed else None,
+            "emotion": primary_emotion,
+            "raw_response": response,
+            "source": source,
+            "model": model_name,
+            "translation": parsed.get("translation") if parsed else None,
+        }
+
+    def transcribe_audio_bytes(
+        self,
+        audio_bytes: bytes,
+        *,
+        model_name: str = "models/gemini-2.5-flash",
+        prompt: Optional[str] = None,
+        mime_type: str = "audio/mp3",
+        structured: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Transcribe raw audio bytes (no file path) and return a structured response
+        aligned with `transcribe_audio`.
+
+        Args:
+            audio_bytes: Raw audio data to transcribe.
+            model_name: Gemini model to use.
+            prompt: Optional prompt; defaults to the detailed transcription prompt.
+            mime_type: MIME type of the audio bytes (e.g., audio/mp3, audio/wav).
+            structured: When True, request JSON with summary/segments; falls back to text.
+
+        Returns:
+            A dict containing transcript text, optional summary and segments, and the raw response.
+        """
+        if not isinstance(audio_bytes, (bytes, bytearray)):
+            return {"error": "audio_bytes must be bytes or bytearray."}
+        if not mime_type:
+            return {"error": "mime_type is required for raw audio bytes."}
+
+        prompt = prompt or DEFAULT_TRANSCRIPTION_PROMPT
+        audio_part = LLMUtilitySuite._make_audio_part(mime_type, bytes(audio_bytes))
+
+        generation_config = None
+        schema = self._transcription_schema_for_prompt(prompt) if structured else None
+        if schema is not None:
+            generation_config = self._build_generation_config(schema)
+
+        try:
+            normalized_model = self._normalize_model_name(model_name)
+            model = genai.GenerativeModel(normalized_model)
+            response = model.generate_content(
+                contents=[prompt, audio_part],
+                generation_config=generation_config,
+            )
+        except Exception as e:
+            return {
+                "error": f"An error occurred during byte transcription: {e}",
+                "source": "inline-bytes",
+                "model": model_name,
+            }
+
+        parsed = self._maybe_parse_structured_response(response, structured)
         segments = parsed.get("segments", []) if parsed else []
-        transcript_text = self._segments_to_text(segments) if segments else self._extract_text(response)
+        transcript_text = None
+        if parsed:
+            transcript_text = parsed.get("content")
+        if not transcript_text:
+            transcript_text = self._segments_to_text(segments) if segments else self._extract_text(response)
         primary_emotion = parsed.get("emotion") if parsed else None
         if not primary_emotion and segments:
             primary_emotion = segments[0].get("emotion")
@@ -276,8 +367,9 @@ class LLMUtilitySuite:
             "segments": segments,
             "emotion": primary_emotion,
             "raw_response": response,
-            "source": source,
+            "source": "inline-bytes",
             "model": model_name,
+            "translation": parsed.get("translation") if parsed else None,
         }
 
     @staticmethod
@@ -331,12 +423,31 @@ class LLMUtilitySuite:
         return None
 
     @staticmethod
-    def _default_transcription_schema():
+    def _transcription_schema_for_prompt(prompt: Optional[str]):
+        """
+        Pick a response schema that matches the prompt shape.
+        """
         try:
             schema_cls = genai.types.Schema
             type_enum = genai.types.Type
         except Exception:
             return None
+
+        if prompt and prompt.strip() == CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE:
+            return schema_cls(
+                type=type_enum.OBJECT,
+                properties={
+                    "summary": schema_cls(type=type_enum.STRING, description="Brief summary of the audio."),
+                    "content": schema_cls(type=type_enum.STRING, description="Full transcription text."),
+                    "translation": schema_cls(type=type_enum.STRING, description="English translation when applicable."),
+                    "language_code": schema_cls(type=type_enum.STRING, description="Primary language code."),
+                    "emotion": schema_cls(
+                        type=type_enum.STRING,
+                        enum=["positive", "neutral", "tense", "unfocused", "collaborative", "creative", "unproductive"],
+                    ),
+                },
+                required=["summary", "content", "language_code", "emotion"],
+            )
 
         return schema_cls(
             type=type_enum.OBJECT,
@@ -425,6 +536,11 @@ class LLMUtilitySuite:
         """
         Normalize casing/fields in transcription payload.
         """
+        normalized = dict(payload)
+        top_emotion = normalized.get("emotion")
+        if isinstance(top_emotion, str):
+            normalized["emotion"] = top_emotion.lower()
+
         segments = payload.get("segments") or []
         normalized_segments = []
         for seg in segments:
@@ -433,8 +549,9 @@ class LLMUtilitySuite:
                 seg = {**seg, "emotion": emotion.lower()}
             normalized_segments.append(seg)
         if segments:
-            payload = {**payload, "segments": normalized_segments}
-        return payload
+            normalized["segments"] = normalized_segments
+
+        return normalized
 
     @staticmethod
     def _normalize_model_name(model_name: str) -> str:
@@ -455,9 +572,9 @@ class LLMUtilitySuite:
         wait_for_active_sec: int,
     ) -> Tuple[Any, str]:
         if isinstance(audio_source, bytes):
-            if not mime_type:
-                raise ValueError("mime_type is required when passing raw audio bytes.")
-            return {"mime_type": mime_type, "data": audio_source}, "inline-bytes"
+            # Default to 16-bit little-endian PCM if no MIME provided.
+            fallback_mime = "audio/raw; encoding=signed-integer; bits=16; rate=44100; channels=2"
+            return {"mime_type": mime_type or fallback_mime, "data": audio_source}, "inline-bytes"
 
         path = Path(audio_source)
         if not path.exists():

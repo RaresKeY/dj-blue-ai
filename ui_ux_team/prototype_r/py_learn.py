@@ -1,5 +1,12 @@
+import threading
+import random
+import time
 import sys
 import os
+
+from dotenv import load_dotenv
+from pathlib import Path
+
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QFrame, QLabel, QListWidget,
@@ -10,12 +17,12 @@ from PySide6.QtGui import (
     QPainter, QFont, QPainterPath, QRegion, QCursor
 )
 from PySide6.QtWidgets import (
-    QGraphicsColorizeEffect, QSizePolicy, QSpacerItem, 
+    QGraphicsColorizeEffect, QGraphicsOpacityEffect, QSizePolicy, QSpacerItem, 
     QTextBrowser, QPlainTextEdit, QTextEdit
 )
 from PySide6.QtCore import (
     Qt, Signal, QPropertyAnimation, QEasingCurve, 
-    QRect, Property, QRect, QSize, QPoint
+    Property, QRect, QSize, QPoint, QTimer, QEvent, QParallelAnimationGroup
 )
 
 from pathlib import Path
@@ -30,6 +37,8 @@ from architects.helpers.audio_utils import (
     write_wav, read_wav
 )
 from architects.helpers.tabs_audio import get_display_names
+from architects.helpers.api_utils import LLMUtilitySuite
+from architects.helpers.managed_mem import ManagedMem
 
 # ---- Dark Theme Color Constants ----
 COLOR_BG_MAIN        = "#1E1E1E"   # was: "orange"
@@ -97,10 +106,16 @@ class ImageButton(QLabel):
         self.anim.setDuration(120)
         self.anim.setEasingCurve(QEasingCurve.OutQuad)
 
-    def set_image(self, path, fallback=None):
-        pm = QPixmap(path)
-        if pm.isNull() and fallback:
-            pm = QPixmap(fallback)
+    def set_image(self, path, fallback=IMAGE_NOT_FOUND):
+        # Normalize the path and always fall back to a valid pixmap so the icon never disappears.
+        resolved = path
+        if not os.path.isabs(resolved):
+            resolved = os.path.join(BASE, path)
+
+        pm = QPixmap(resolved)
+        if pm.isNull():
+            pm = QPixmap(fallback or IMAGE_NOT_FOUND)
+
         self.base_pixmap = pm
         self.update()
 
@@ -186,6 +201,221 @@ class ImageButton(QLabel):
         self.anim.setStartValue(self._scale)
         self.anim.setEndValue(value)
         self.anim.start()
+
+
+class MarqueeLabel(QLabel):
+    """Horizontal marquee that scrolls text left to right in a loop."""
+    def __init__(self, text="", parent=None, step=1, interval_ms=30, gap=50):
+        super().__init__(parent)
+        self._offset = 0
+        self._text_width = 0
+        self._gap = gap
+        self._step = step
+
+        self.setText(text)
+        self.setContentsMargins(10, 0, 10, 0)
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start(interval_ms)
+
+    def setText(self, text):
+        super().setText(text)
+        fm = self.fontMetrics()
+        self._text_width = fm.horizontalAdvance(text) if text else 0
+
+    def _tick(self):
+        if self._text_width <= 0:
+            return
+        span = self._text_width + self._gap
+        self._offset = (self._offset + self._step) % span
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.TextAntialiasing)
+        fm = self.fontMetrics()
+        text = self.text()
+
+        # Vertically center the text
+        y = (self.height() + fm.ascent() - fm.descent()) / 2
+        if self._text_width <= 0:
+            return
+
+        span = self._text_width + self._gap
+        x = -self._text_width + self._offset
+
+        while x < self.width():
+            painter.drawText(x, y, text)
+            x += span
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.FontChange:
+            self.setText(self.text())
+        super().changeEvent(event)
+
+
+class QueuedMarqueeLabel(QWidget):
+    """Wrapper that cycles through queued strings with a soft fade between them."""
+    def __init__(self, items=None, parent=None, hold_ms=3000, fade_ms=200, **marquee_kwargs):
+        super().__init__(parent)
+        self._queue = list(items) if items else []
+        self._idx = 0
+        self._hold_ms = hold_ms
+        self._fade_ms = fade_ms
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.label = MarqueeLabel("", **marquee_kwargs)
+        self._opacity = QGraphicsOpacityEffect(self.label)
+        self._opacity.setOpacity(1.0)
+        self.label.setGraphicsEffect(self._opacity)
+        layout.addWidget(self.label)
+
+        if self._queue:
+            self.label.setText(self._queue[0])
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._next_text)
+        if self._queue:
+            self._timer.start(self._hold_ms)
+
+    def set_queue(self, items):
+        self._queue = list(items) if items else []
+        self._idx = 0
+        if self._queue:
+            self.label.setText(self._queue[0])
+            self._timer.start(self._hold_ms)
+        else:
+            self._timer.stop()
+
+    def enqueue(self, text):
+        self._queue.append(text)
+        if len(self._queue) == 1:
+            self.label.setText(text)
+            self._timer.start(self._hold_ms)
+
+    def _next_text(self):
+        if not self._queue:
+            return
+        self._idx = (self._idx + 1) % len(self._queue)
+        self._fade_to(self._queue[self._idx])
+
+    def _fade_to(self, text):
+        self._timer.stop()
+        anim_out = QPropertyAnimation(self._opacity, b"opacity", self)
+        anim_out.setDuration(self._fade_ms)
+        anim_out.setStartValue(1.0)
+        anim_out.setEndValue(0.0)
+        anim_out.finished.connect(lambda: self._on_faded(text))
+        anim_out.start(QPropertyAnimation.DeleteWhenStopped)
+
+    def _on_faded(self, text):
+        self.label.setText(text)
+        anim_in = QPropertyAnimation(self._opacity, b"opacity", self)
+        anim_in.setDuration(self._fade_ms)
+        anim_in.setStartValue(0.0)
+        anim_in.setEndValue(1.0)
+        anim_in.finished.connect(lambda: self._timer.start(self._hold_ms))
+        anim_in.start(QPropertyAnimation.DeleteWhenStopped)
+
+
+class FloatingToast(QLabel):
+    """Bottom-up floating text (Meet/stream-style) that animates in and out on demand."""
+    def __init__(self, parent=None, bg="#1f1f1f", fg="#a3a3a3", font_size=25, border="#303030"):
+        super().__init__(parent)
+        self._bg = bg
+        self._fg = fg
+        self._font_size = font_size
+        self._border = border
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setVisible(False)
+        self._apply_style()
+
+        self._opacity = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self._opacity)
+        self._current_anim = None
+
+    def _apply_style(self):
+        self.setStyleSheet(f"""
+            QLabel {{
+                background: {self._bg};
+                color: {self._fg};
+                padding: 10px 14px;
+                border-radius: 12px;
+                border: 1px solid {self._border};
+                font-weight: 600;
+                letter-spacing: 0.3px;
+                font-size: {self._font_size}px;
+            }}
+        """)
+
+    def set_font_size(self, size_px: int):
+        """Adjust toast text size."""
+        self._font_size = size_px
+        self._apply_style()
+
+    def set_border_color(self, color: str):
+        """Adjust toast border color."""
+        self._border = color
+        self._apply_style()
+
+    def show_message(self, text, duration_ms=2200, bottom_band_ratio=0.3, top_band_ratio=0.25):
+        parent = self.parentWidget()
+        if parent is None:
+            return
+
+        # Reset any running animation.
+        if self._current_anim:
+            self._current_anim.stop()
+
+        self.setText(text)
+        self.adjustSize()
+
+        usable_width = max(1, parent.width() - self.width() - 20)
+        start_x = random.randint(10, usable_width)
+        end_x = start_x  # keep vertical drift; adjust if lateral drift desired
+
+        bottom_band_start = int(parent.height() * (1 - bottom_band_ratio))
+        bottom_band_end = parent.height() - self.height() - 10
+        bottom_band_end = max(bottom_band_start, bottom_band_end)
+        start_y = random.randint(bottom_band_start, bottom_band_end) if bottom_band_end >= bottom_band_start else bottom_band_end
+
+        top_band_end = int(parent.height() * top_band_ratio)
+        top_band_end = max(10, top_band_end)
+        end_y = random.randint(10, top_band_end)
+
+        self.move(start_x, start_y)
+        self._opacity.setOpacity(0.0)
+        self.show()
+        self.raise_()
+
+        pos_anim = QPropertyAnimation(self, b"pos", self)
+        pos_anim.setDuration(duration_ms)
+        pos_anim.setStartValue(QPoint(start_x, start_y))
+        pos_anim.setEndValue(QPoint(end_x, end_y))
+        pos_anim.setEasingCurve(QEasingCurve.OutQuad)
+
+        fade_anim = QPropertyAnimation(self._opacity, b"opacity", self)
+        fade_anim.setDuration(duration_ms)
+        fade_anim.setKeyValueAt(0.0, 0.0)
+        fade_anim.setKeyValueAt(0.15, 1.0)
+        fade_anim.setKeyValueAt(0.8, 1.0)
+        fade_anim.setKeyValueAt(1.0, 0.0)
+
+        group = QParallelAnimationGroup(self)
+        group.addAnimation(pos_anim)
+        group.addAnimation(fade_anim)
+        group.finished.connect(self._on_finished)
+
+        self._current_anim = group
+        group.start(QPropertyAnimation.DeleteWhenStopped)
+
+    def _on_finished(self):
+        self.hide()
+        self._current_anim = None
 
 
 class PopupTitleBar(QWidget):
@@ -487,30 +717,36 @@ class TextBox(QPlainTextEdit):
                 self.appendPlainText(line)
                 self.transcript_index += 1
 
-        self.appendPlainText("SPEAKER 1: Hello")
-        self.appendPlainText("SPEAKER 2: Hi there.")
+        # self.appendPlainText("SPEAKER 1: Hello")
+        # self.appendPlainText("SPEAKER 2: Hi there.")
 
 
 class TranscriptWindow(QWidget):
     closed = Signal()
-    def __init__(self):
+
+    def __init__(self, parent):
         super().__init__()
         self.setWindowTitle("Transcript")
 
         layout = QVBoxLayout(self)
 
         record_button = MainUI.button("assets/record_black.png", (65, 65))
+        record_button.clicked.connect(parent.record_transcript)
+
         search_bar = SearchBar()
 
         top_box = QHBoxLayout()
         top_box.addWidget(record_button)
         top_box.addWidget(search_bar)
 
-        text_box = TextBox()
+        self.text_box = TextBox()
 
         layout.addLayout(top_box, 1)
-        layout.addWidget(text_box, 9)
+        layout.addWidget(self.text_box, 9)
     
+    def add_transcript_segment(self, seg):
+        self.text_box.appendPlainText(seg)
+
     def closeEvent(self, event):
         self.closed.emit()
         return super().closeEvent(event)
@@ -641,10 +877,12 @@ class BlueBirdChat(QWidget):
 
 
 class MainUI(QWidget):
+    transcript_ready = Signal(str)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Testing Site")
-        self.move(1000, 70)
+        self.move(2500, 70)
         self.resize(721, 487)
 
         # button references
@@ -656,24 +894,70 @@ class MainUI(QWidget):
         ui = self.build_main_layout()
         self.root.addWidget(ui)
 
+        # managed mem
+        self.man_mem = ManagedMem()
+
         # music player
         self._player = None
         self._paused = False
 
-        # childrens windows/menus
-        self._transcript_win = None
+        # audio recorder
+        self._recorder = None
+        self.run_test_thread = False
+
+        # childrens windows/menus V
+        # transcript window
+        self._transcript_win = TranscriptWindow(parent=self)
+        self._transcript_win.closed.connect(lambda: setattr(self, "_transcript_win", None))
+        self._show_transcript_window = False
+
+        # transcript segments
+        self._current_session_segments = []
+        self._current_session = f"SESSION [{self.man_mem.timestamp_helper()}]"
+
+        # route worker thread transcript strings safely to the UI thread
+        self.transcript_ready.connect(self._transcript_win.add_transcript_segment)
+
         self._bluebird_chat = None
         self._settings_menu = None
         self._meet_type = None
 
-    def open_transcript(self):
-        if self._transcript_win is None:
-            self._transcript_win = TranscriptWindow()
+        # API Utils
+        api_key = self.load_api_key()
+        self._llm_utils = None
+        if not api_key:
+            print("Missing API Key, LLMUtilitySuite not open")
+        else:
+            self._llm_utils = LLMUtilitySuite(api_key)
 
-            # connect x to MainUi attr
-            self._transcript_win.closed.connect(
-                lambda: setattr(self, "_transcript_win", None)
-            )
+    @staticmethod
+    def load_api_key():
+        load_dotenv()
+        os.environ["AI_STUDIO_API_KEY"] = os.getenv("AI_STUDIO_API_KEY", "")
+        api_key = os.getenv("AI_STUDIO_API_KEY")
+
+        return api_key
+
+    def _update_transcript_mem(self, new_seg=None):
+        transcript_key = 'transcript_sessions'
+        mem_segments = self.man_mem.gettr(transcript_key) or dict()
+        if not isinstance(mem_segments, dict):
+            mem_segments = dict()
+
+        if new_seg:
+            self._current_session_segments.append(new_seg)
+
+        session = self._current_session
+        segs = self._current_session_segments
+
+        mem_segments.setdefault(session, [])
+        mem_segments[session].append(segs)
+
+        self.man_mem.settr(transcript_key, mem_segments)
+
+    def open_transcript(self):
+        if self._show_transcript_window is False:
+            self._show_transcript_window = True
 
             x = self.x() + self.width()
             y = self.y()
@@ -683,8 +967,60 @@ class MainUI(QWidget):
             self._transcript_win.show()
             return
 
-        self._transcript_win.close()
-        self._transcript_win = None
+        self._transcript_win.hide()
+        self._show_transcript_window = False
+
+    def record_transcript(self):
+        if self._recorder is None:
+            self._recorder = AudioController(chunk_seconds=30)
+            self._recorder.start()
+            print('recording started, transcript recording')
+
+            # test thread to check
+            self.run_test_thread = True
+            t = threading.Thread(target=self.transcript_worker, daemon=True)
+            t.start()
+
+        else:
+            self.run_test_thread = False
+            self._recorder.stop()
+            self._recorder.close()
+            self._recorder = None
+            print('recording stopped, transcript recording')
+
+    def transcript_worker(self):
+        while self.run_test_thread:
+            if self._recorder.chunks:
+                print("transcribing...")
+                BASE_DIR = Path(__file__).resolve().parent
+                audio_bytes = self._recorder.pop_combined_stereo()
+                result = {"text": None, "summary": None, "emotion": None}
+
+                write_wav(str(BASE_DIR / "temp.wav"), audio_bytes,
+                    rate=self._recorder.mic.rate,
+                    channels=2,
+                    sampwidth=self._recorder.mic.sampwidth)
+
+                if audio_bytes:
+                    result = self._llm_utils.transcribe_audio(str(BASE_DIR / "temp.wav"))
+                    result.pop("raw_response", None)
+                    result.pop("source", None)
+                    result.pop("model", None)
+                    self._update_transcript_mem(result)
+
+                print("--- DEBUG TRANSCRIPT")
+                print(result)
+                print("-------- END -------\n")
+
+                if result.get("text"):
+                    self.transcript_ready.emit("Transcript:\n" + result.get("text") + '\n\n' +
+                                               "Translation:\n" + result.get("translation") + '\n\n' +
+                                               "Summary:\n" + result.get("summary") + '\n\n' +
+                                               "Emotion: " + result.get("emotion") + '\n' + "---\n")
+                else:
+                    print("DEBUG: missing transcript text")
+
+            time.sleep(1)
 
     def meet_type_menu(self, parent):
         if self._meet_type is None:
@@ -720,6 +1056,21 @@ class MainUI(QWidget):
         }, parent=self)
         self._settings_menu.show_pos_size(self.pos(), self.size())
 
+    def info_clicked(self, text="Test"):
+        mood_items = [
+            "😊 Positive",
+            "😐 Neutral",
+            "😠 Tense",
+            "😴 Unfocused",
+            "🤝 Collaborative",
+            "💡 Creative",
+            "📉 Unproductive",
+        ]
+
+        FloatingToast(self).show_message(random.choice(mood_items))
+
+        pass
+
     def build_sidebar(self):
         # depth 1
         # vertical sidebar right side
@@ -731,9 +1082,10 @@ class MainUI(QWidget):
 
         #sidebar buttons depth 2
 
-        # user
-        user_button = self.button("assets/user_black.png", size=(60, 60))
-        layout.addWidget(user_button, alignment=Qt.AlignHCenter)
+        # transcript button
+        transcript_button = self.button("assets/transcript_black.png", size=(60, 60))
+        transcript_button.clicked.connect(self.open_transcript)
+        layout.addWidget(transcript_button, alignment=Qt.AlignHCenter)
 
         # api connector
         api_button = self.button("assets/api_black.png", size=(50, 50))
@@ -741,6 +1093,7 @@ class MainUI(QWidget):
 
         # info/dark/light theme
         info_button = self.button("assets/info.png", size=(50, 50))
+        info_button.clicked.connect(self.info_clicked)
         layout.addWidget(info_button, alignment=Qt.AlignHCenter)
 
         meet_type = self.button("assets/meet_type_black.png", size=(50, 50))
@@ -749,10 +1102,9 @@ class MainUI(QWidget):
 
         layout.addStretch(1)    # middle stretch
 
-        # transcript button
-        transcript_button = self.button("assets/transcript_black.png", size=(60, 60))
-        transcript_button.clicked.connect(self.open_transcript)
-        layout.addWidget(transcript_button, alignment=Qt.AlignHCenter)
+        # user
+        user_button = self.button("assets/user_black.png", size=(60, 60))
+        layout.addWidget(user_button, alignment=Qt.AlignHCenter)
 
         # settings
         settings_button = self.button("assets/settings_black.png", size=(50, 50))
@@ -810,18 +1162,18 @@ class MainUI(QWidget):
             self._player = PlaybackController(str(audio_path))
             self._player.start()
 
-            print("Playing...")
+            print("Playing Music...")
         else:
             if self._player.paused:
                 self._player.start()
                 self._play_btn.set_image("assets/pause.png")
 
-                print("Resuming...")
+                print("Resuming Music...")
             else:
                 self._player.pause()
                 self._play_btn.set_image("assets/play.png")
 
-                print("Pausing...")
+                print("Pausing Music...")
     
     def build_main_controls(self):
         # depth 3
@@ -889,17 +1241,41 @@ class MainUI(QWidget):
         bottom_con_layout.addWidget(right_spacer)
 
         return bottom_con
-    
+
     def build_main_panel(self):
         # depth 1
         l_main = QVBoxLayout()
-        # l_main.setContentsMargins(0, 0, 0, 0)
+        l_main.setContentsMargins(0, 0, 0, 0)
         l_main.setSpacing(10)
+
+        mood_items = [
+            "😊 Positive",
+            "😐 Neutral",
+            "😠 Tense",
+            "😴 Unfocused",
+            "🤝 Collaborative",
+            "💡 Creative",
+            "📉 Unproductive",
+        ]
+
+        mood_tag = QueuedMarqueeLabel(
+            mood_items,
+            hold_ms=3200,
+            fade_ms=220,
+            step=1,
+            interval_ms=25,
+            gap=60,
+        )
+        font = QFont()
+        font.setPointSize(20)
+        mood_tag.label.setFont(font)
+        mood_tag.setMaximumHeight(30)
 
         covers = self.build_cover_images()
         timeline_box = self.build_main_timeline()
         bottom_panel = self.build_main_bottom_panel()
 
+        l_main.addWidget(mood_tag)
         l_main.addWidget(covers, alignment=Qt.AlignCenter | Qt.AlignBottom)
         l_main.addWidget(timeline_box)
         l_main.addWidget(bottom_panel)
@@ -970,7 +1346,7 @@ if __name__ == "__main__":
     window = MainUI()
 
     # makes it not steal focus
-    # window.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
+    window.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
 
     window.show()
 
