@@ -3,7 +3,7 @@ import os
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QFrame, QLabel, QListWidget,
-    QStackedWidget, QListWidgetItem
+    QStackedWidget, QListWidgetItem, QPushButton
 )
 from PySide6.QtGui import (
     QPalette, QColor, QPixmap, QCursor, QTransform, 
@@ -24,7 +24,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from architects.helpers.music_player import play_music
+from architects.helpers.audio_utils import (
+    PlaybackController, RecordingController, 
+    PlaybackRecorderLinux, AudioController,
+    write_wav, read_wav
+)
 from architects.helpers.tabs_audio import get_display_names
 
 # ---- Dark Theme Color Constants ----
@@ -92,6 +96,13 @@ class ImageButton(QLabel):
         self.anim = QPropertyAnimation(self, b"scale_factor", self)
         self.anim.setDuration(120)
         self.anim.setEasingCurve(QEasingCurve.OutQuad)
+
+    def set_image(self, path, fallback=None):
+        pm = QPixmap(path)
+        if pm.isNull() and fallback:
+            pm = QPixmap(fallback)
+        self.base_pixmap = pm
+        self.update()
 
     # ----------------------------
     # Qt Property backing + accessors
@@ -175,10 +186,6 @@ class ImageButton(QLabel):
         self.anim.setStartValue(self._scale)
         self.anim.setEndValue(value)
         self.anim.start()
-
-
-from PySide6.QtWidgets import QWidget, QLabel, QPushButton, QHBoxLayout
-from PySide6.QtCore import Qt, QPoint
 
 
 class PopupTitleBar(QWidget):
@@ -640,6 +647,9 @@ class MainUI(QWidget):
         self.move(1000, 70)
         self.resize(721, 487)
 
+        # button references
+        self._play_btn = None
+
         self.root = QVBoxLayout(self)
         self.root.setContentsMargins(0, 0, 0, 0)
 
@@ -647,9 +657,10 @@ class MainUI(QWidget):
         self.root.addWidget(ui)
 
         # music player
-        self._payer = None
+        self._player = None
+        self._paused = False
 
-        # extra side windows
+        # childrens windows/menus
         self._transcript_win = None
         self._bluebird_chat = None
         self._settings_menu = None
@@ -784,10 +795,33 @@ class MainUI(QWidget):
         timeline_box.setFixedHeight(15)
 
         return timeline_box
-    
+
+    def stop_click(self):
+        self._player.stop()
+        self._player.close()
+
+        self._player = None
+        print("Stopping")
+
     def play_click(self, file_path="deep_purple_smoke_on_the_water.wav"):
-        self._player = play_music(MainUI.build_path(file_path))
-        print("Playing Music")
+        if self._player is None:
+            self._play_btn.set_image("assets/pause.png")
+            audio_path = Path(__file__).with_name(file_path)
+            self._player = PlaybackController(str(audio_path))
+            self._player.start()
+
+            print("Playing...")
+        else:
+            if self._player.paused:
+                self._player.start()
+                self._play_btn.set_image("assets/pause.png")
+
+                print("Resuming...")
+            else:
+                self._player.pause()
+                self._play_btn.set_image("assets/play.png")
+
+                print("Pausing...")
     
     def build_main_controls(self):
         # depth 3
@@ -799,13 +833,13 @@ class MainUI(QWidget):
         controls.setLayout(control_layer)
 
         prev = self.button("assets/prev.png", size=(35, 35))
-        play = self.button("assets/play.png", size=(80, 80))
-        play.clicked.connect(self.play_click)
+        self._play_btn = self.button("assets/play.png", size=(80, 80))
+        self._play_btn.clicked.connect(self.play_click)
         next = self.button("assets/next.png", size=(35, 35))
 
         control_layer.addWidget(prev)
         # control_layer.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        control_layer.addWidget(play)
+        control_layer.addWidget(self._play_btn)
         # control_layer.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Expanding, QSizePolicy.Minimum))
         control_layer.addWidget(next)
 
@@ -936,7 +970,7 @@ if __name__ == "__main__":
     window = MainUI()
 
     # makes it not steal focus
-    window.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
+    # window.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
 
     window.show()
 
