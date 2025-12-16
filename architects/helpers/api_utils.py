@@ -308,28 +308,27 @@ class LLMUtilitySuite:
         prompt: Optional[str] = None,
         mime_type: str = "audio/mp3",
         structured: bool = True,
+        upload_when_large: bool = True,
+        upload_threshold_bytes: int = INLINE_AUDIO_LIMIT_BYTES,
+        wait_for_active_sec: int = 60,
     ) -> Dict[str, Any]:
         """
-        Transcribe raw audio bytes (no file path) and return a structured response
-        aligned with `transcribe_audio`.
-
-        Args:
-            audio_bytes: Raw audio data to transcribe.
-            model_name: Gemini model to use.
-            prompt: Optional prompt; defaults to the detailed transcription prompt.
-            mime_type: MIME type of the audio bytes (e.g., audio/mp3, audio/wav).
-            structured: When True, request JSON with summary/segments; falls back to text.
-
-        Returns:
-            A dict containing transcript text, optional summary and segments, and the raw response.
+        Mirror `transcribe_audio` but operate directly on raw audio bytes.
+        Keeps identical prompt defaults, schema/response handling, and return shape.
         """
         if not isinstance(audio_bytes, (bytes, bytearray)):
             return {"error": "audio_bytes must be bytes or bytearray."}
         if not mime_type:
             return {"error": "mime_type is required for raw audio bytes."}
 
-        prompt = prompt or DEFAULT_TRANSCRIPTION_PROMPT
-        audio_part = LLMUtilitySuite._make_audio_part(mime_type, bytes(audio_bytes))
+        prompt = prompt or CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE
+        audio_part, source = self._prepare_audio_part(
+            bytes(audio_bytes),
+            mime_type=mime_type,
+            upload_when_large=upload_when_large,
+            upload_threshold_bytes=upload_threshold_bytes,
+            wait_for_active_sec=wait_for_active_sec,
+        )
 
         generation_config = None
         schema = self._transcription_schema_for_prompt(prompt) if structured else None
@@ -345,29 +344,23 @@ class LLMUtilitySuite:
             )
         except Exception as e:
             return {
-                "error": f"An error occurred during byte transcription: {e}",
-                "source": "inline-bytes",
+                "error": f"An error occurred during transcription: {e}",
+                "source": source,
                 "model": model_name,
             }
 
         parsed = self._maybe_parse_structured_response(response, structured)
-        segments = parsed.get("segments", []) if parsed else []
         transcript_text = None
         if parsed:
             transcript_text = parsed.get("content")
-        if not transcript_text:
-            transcript_text = self._segments_to_text(segments) if segments else self._extract_text(response)
         primary_emotion = parsed.get("emotion") if parsed else None
-        if not primary_emotion and segments:
-            primary_emotion = segments[0].get("emotion")
 
         return {
-            "text": transcript_text.strip(),
+            "text": (transcript_text or "").strip(),
             "summary": parsed.get("summary") if parsed else None,
-            "segments": segments,
             "emotion": primary_emotion,
             "raw_response": response,
-            "source": "inline-bytes",
+            "source": source,
             "model": model_name,
             "translation": parsed.get("translation") if parsed else None,
         }

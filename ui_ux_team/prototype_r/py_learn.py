@@ -83,6 +83,7 @@ IMAGE_NOT_FOUND = os.path.join(BASE, "assets/image_not_found_white.png")
 
 
 def _pcm_to_wav_bytes(pcm, *, rate, channels, sampwidth):
+    # TODO: file write target (in-memory) when serializing PCM to WAV frames
     buf = BytesIO()
     with wave.open(buf, "wb") as wf:
         wf.setnchannels(channels)
@@ -965,7 +966,8 @@ class MainUI(QWidget):
         mem_segments.setdefault(session, [])
         mem_segments[session].append(segs)
 
-        # TODO: re-enable with lazy save logging, save disk writes
+        # TODO: file write via ManagedMem persistence when re-enabled (currently disabled)
+        # FIX THE HEAVY WRITES FIRST !!!
         # self.man_mem.settr(transcript_key, mem_segments)
 
     def open_transcript(self):
@@ -1014,6 +1016,7 @@ class MainUI(QWidget):
                         channels=2,
                         sampwidth=self._recorder.mic.sampwidth)
 
+                    # TODO: make SoundPacketBuilder a Singleton and initialize in __init__
                     packet = SoundPacketBuilder(audio_bytes,
                         rate=self._recorder.mic.rate,
                         channels=2,
@@ -1025,6 +1028,7 @@ class MainUI(QWidget):
                         wav_bytes,
                         mime_type="audio/wav",
                         model_name="models/gemini-2.5-flash",
+                        structured=True,
                     )
                     result.pop("raw_response", None)
                     result.pop("source", None)
