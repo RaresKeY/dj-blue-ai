@@ -3,6 +3,8 @@ import random
 import time
 import sys
 import os
+import wave
+from io import BytesIO
 
 from dotenv import load_dotenv
 from pathlib import Path
@@ -34,7 +36,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from architects.helpers.audio_utils import (
     PlaybackController, RecordingController, 
     PlaybackRecorderLinux, AudioController,
-    write_wav, read_wav
+    SoundPacketBuilder
 )
 from architects.helpers.tabs_audio import get_display_names
 from architects.helpers.api_utils import LLMUtilitySuite
@@ -78,6 +80,16 @@ COLOR_BLUE_BIRD      = "#1565C0"   # was: "blue"
 
 BASE = os.path.dirname(__file__)
 IMAGE_NOT_FOUND = os.path.join(BASE, "assets/image_not_found_white.png")
+
+
+def _pcm_to_wav_bytes(pcm, *, rate, channels, sampwidth):
+    buf = BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(sampwidth)
+        wf.setframerate(rate)
+        wf.writeframes(pcm)
+    return buf.getvalue()
 
 class ImageButton(QLabel):
     clicked = Signal()
@@ -953,7 +965,8 @@ class MainUI(QWidget):
         mem_segments.setdefault(session, [])
         mem_segments[session].append(segs)
 
-        self.man_mem.settr(transcript_key, mem_segments)
+        # TODO: re-enable with lazy save logging, save disk writes
+        # self.man_mem.settr(transcript_key, mem_segments)
 
     def open_transcript(self):
         if self._show_transcript_window is False:
@@ -974,7 +987,7 @@ class MainUI(QWidget):
         if self._recorder is None:
             self._recorder = AudioController(chunk_seconds=30)
             self._recorder.start()
-            print('recording started, transcript recording')
+            print('recording ... transcript up')
 
             # test thread to check
             self.run_test_thread = True
@@ -986,23 +999,33 @@ class MainUI(QWidget):
             self._recorder.stop()
             self._recorder.close()
             self._recorder = None
-            print('recording stopped, transcript recording')
+            print('recording stopped')
 
     def transcript_worker(self):
         while self.run_test_thread:
             if self._recorder.chunks:
                 print("transcribing...")
-                BASE_DIR = Path(__file__).resolve().parent
                 audio_bytes = self._recorder.pop_combined_stereo()
                 result = {"text": None, "summary": None, "emotion": None}
 
-                write_wav(str(BASE_DIR / "temp.wav"), audio_bytes,
-                    rate=self._recorder.mic.rate,
-                    channels=2,
-                    sampwidth=self._recorder.mic.sampwidth)
-
                 if audio_bytes:
-                    result = self._llm_utils.transcribe_audio(str(BASE_DIR / "temp.wav"))
+                    wav_bytes = _pcm_to_wav_bytes(audio_bytes,
+                        rate=self._recorder.mic.rate,
+                        channels=2,
+                        sampwidth=self._recorder.mic.sampwidth)
+
+                    packet = SoundPacketBuilder(audio_bytes,
+                        rate=self._recorder.mic.rate,
+                        channels=2,
+                        sampwidth=self._recorder.mic.sampwidth)
+                    compressed_bytes = packet.prep_pck()
+                    print(f"compressed audio prepared ({len(compressed_bytes)} bytes)")
+
+                    result = self._llm_utils.transcribe_audio_bytes(
+                        wav_bytes,
+                        mime_type="audio/wav",
+                        model_name="models/gemini-2.5-flash",
+                    )
                     result.pop("raw_response", None)
                     result.pop("source", None)
                     result.pop("model", None)
@@ -1012,13 +1035,19 @@ class MainUI(QWidget):
                 print(result)
                 print("-------- END -------\n")
 
+                def parse_none(txt):
+                    if isinstance(txt, str):
+                        return txt
+                    else:
+                        return "MISSING"
+
                 if result.get("text"):
-                    self.transcript_ready.emit("Transcript:\n" + result.get("text") + '\n\n' +
-                                               "Translation:\n" + result.get("translation") + '\n\n' +
-                                               "Summary:\n" + result.get("summary") + '\n\n' +
-                                               "Emotion: " + result.get("emotion") + '\n' + "---\n")
+                    self.transcript_ready.emit("Transcript:\n" + parse_none(result.get("text")) + '\n\n' +
+                                               "Translation:\n" + parse_none(result.get("translation", "MISSING")) + '\n\n' +
+                                               "Summary:\n" + parse_none(result.get("summary", "MISSING")) + '\n\n' +
+                                               "Emotion: " + parse_none(result.get("emotion", "MISSING")) + '\n' + "---\n")
                 else:
-                    print("DEBUG: missing transcript text")
+                    print("DEBUG: missing transcript text OR not speech detected")
 
             time.sleep(1)
 
