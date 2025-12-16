@@ -1,12 +1,9 @@
 import os
-from pathlib import Path
 import time
+from io import BytesIO
+import wave
 
-from audio_utils import (
-    AudioController,
-    SoundPacketBuilder,
-    write_wav,
-)
+from audio_utils import AudioController, SoundPacketBuilder
 from api_utils import LLMUtilitySuite
 
 from dotenv import load_dotenv
@@ -21,6 +18,16 @@ def _collect_combined_chunks(controller: AudioController) -> bytes:
             break
         combined_chunks.append(combined)
     return b"".join(combined_chunks)
+
+
+def _pcm_to_wav_bytes(pcm: bytes, *, rate: int, channels: int, sampwidth: int) -> bytes:
+    buf = BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(sampwidth)
+        wf.setframerate(rate)
+        wf.writeframes(pcm)
+    return buf.getvalue()
 
 
 def main():
@@ -41,15 +48,6 @@ def main():
     if not captured:
         raise SystemExit("No audio captured from mic + speaker.")
 
-    recorded_wav = Path(__file__).with_name("captured_mic_speaker.wav")
-    write_wav(
-        str(recorded_wav),
-        captured,
-        rate=recorder.mic.rate,
-        channels=2,
-        sampwidth=recorder.mic.sampwidth,
-    )
-
     packet = SoundPacketBuilder(
         captured,
         rate=recorder.mic.rate,
@@ -57,12 +55,16 @@ def main():
         sampwidth=recorder.mic.sampwidth,
     )
     compressed_bytes = packet.prep_pck()
-    compressed_path = Path(__file__).with_name("captured_mic_speaker.ulaw")
-    packet.write(str(compressed_path))
 
     llm = LLMUtilitySuite(api_key)
-    transcription = llm.transcribe_audio(
-        recorded_wav,
+    wav_bytes = _pcm_to_wav_bytes(
+        captured,
+        rate=recorder.mic.rate,
+        channels=2,
+        sampwidth=recorder.mic.sampwidth,
+    )
+    transcription = llm.transcribe_audio_bytes(
+        wav_bytes,
         mime_type="audio/wav",
         model_name="models/gemini-2.5-flash",
     )
@@ -73,7 +75,7 @@ def main():
     if transcription.get("emotion"):
         print(f"Detected emotion: {transcription.get('emotion')}")
 
-    print(f"Compressed audio saved to {compressed_path} ({len(compressed_bytes)} bytes)")
+    print(f"Compressed audio prepared ({len(compressed_bytes)} bytes, not saved to disk)")
 
 
 if __name__ == "__main__":
