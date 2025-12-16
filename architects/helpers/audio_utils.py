@@ -1,13 +1,16 @@
+from typing import Optional, List, Tuple
 from pathlib import Path
+from array import array
 from io import BytesIO
 import subprocess
 import threading
-import select
-from typing import Optional, List, Tuple
-from array import array
 import pyaudio
+import audioop
+import select
+import struct
 import wave
 import time
+import math
 
 _USE_EXISTING_DURATION = object()
 
@@ -463,6 +466,85 @@ class AudioController:
         return self._combine_stereo_mix(mic_chunk, spk_chunk)
 
 
+# Network requests packet controller/scheduler
+class SoundPacketBuilder:
+    def __init__(self, audio_bytes: bytes, *, rate: int, channels: int = 2, sampwidth: int = 2):
+        self.orig_rate = rate
+        self.channels = channels
+        self.sampwidth = sampwidth
+
+        self.new_rate = 16000
+        self.packet = audio_bytes
+        self.encoding = "pcm16"
+
+    def new_pck(self, audio_bytes: bytes, rate: int, channels: int = 2, sampwidth: int = 2):
+        pass
+
+    def prep_pck(self) -> bytes:
+        """
+        Prepare audio bytes for network / AI transport.
+        Output: μ-law, mono, 16kHz
+        """
+        self._ensure_mono()
+        self._resample()
+        self._compress()
+        return self.packet
+
+    def _ensure_mono(self):
+        if self.channels == 1:
+            return
+
+        # Downmix to mono (simple average)
+        self.packet = audioop.tomono(
+            self.packet,
+            self.sampwidth,
+            0.5,
+            0.5,
+        )
+        self.channels = 1
+
+    def _resample(self):
+        if self.orig_rate == self.new_rate:
+            return
+
+        # audioop.ratecv returns (data, state)
+        self.packet, _ = audioop.ratecv(
+            self.packet,
+            self.sampwidth,
+            self.channels,
+            self.orig_rate,
+            self.new_rate,
+            None,
+        )
+
+    def _compress(self):
+        # PCM16 → μ-law (8-bit)
+        self.packet = audioop.lin2ulaw(self.packet, self.sampwidth)
+        self.encoding = "mulaw"
+
+    def write(self, path: str, *, decoded_wav: bool = False):
+        """
+        Save packet to disk.
+
+        decoded_wav=False  -> saves raw compressed bytes (.ulaw)
+        decoded_wav=True   -> saves decoded PCM WAV for listening
+        """
+        if self.encoding != "mulaw":
+            raise RuntimeError("packet is not compressed")
+
+        if decoded_wav:
+            pcm = audioop.ulaw2lin(self.packet, 2)
+            with wave.open(path, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(self.new_rate)
+                wf.writeframes(pcm)
+        else:
+            with open(path, "wb") as f:
+                f.write(self.packet)
+
+
+
 def write_wav(path, pcm, *, rate, channels, sampwidth):
     with wave.open(path, "wb") as wf:
         wf.setnchannels(channels)
@@ -478,6 +560,53 @@ def read_wav(path):
         rate = wf.getframerate()
         data = wf.readframes(wf.getnframes())
     return data, {"channels": channels, "sampwidth": sampwidth, "rate": rate}
+
+
+def audio_bytes_info(
+    audio_bytes: bytes,
+    sample_rate: int,
+    channels: int = 1,
+    sample_width: int = 2,  # bytes (2 = int16)
+):
+    if not audio_bytes:
+        raise ValueError("empty audio buffer")
+
+    total_bytes = len(audio_bytes)
+    frame_size = channels * sample_width
+    total_frames = total_bytes // frame_size
+    duration_sec = total_frames / sample_rate
+
+    # RMS + peak (int16 only)
+    rms = peak = None
+    if sample_width == 2:
+        samples = struct.unpack(
+            "<" + "h" * (total_bytes // 2), audio_bytes
+        )
+        sq = sum(s * s for s in samples)
+        rms = math.sqrt(sq / len(samples))
+        peak = max(abs(s) for s in samples)
+
+    print(f"bytes        : {total_bytes}")
+    print(f"frames       : {total_frames}")
+    print(f"duration (s) : {duration_sec:.4f}")
+    print(f"sample_rate  : {sample_rate}")
+    print(f"channels     : {channels}")
+    print(f"sample_width : {sample_width} bytes")
+
+    if rms is not None:
+        print(f"rms          : {rms:.1f}")
+        print(f"peak         : {peak}")
+
+    return {
+        "bytes": total_bytes,
+        "frames": total_frames,
+        "duration_sec": duration_sec,
+        "sample_rate": sample_rate,
+        "channels": channels,
+        "sample_width": sample_width,
+        "rms": rms,
+        "peak": peak,
+    }
 
 
 if __name__ == "__main__":
@@ -513,50 +642,66 @@ if __name__ == "__main__":
     print("mic seconds (computed):", pcm_seconds(all_mic, controller.mic.rate, controller.mic.channels, controller.mic.sampwidth))
     print("speaker seconds (computed):", pcm_seconds(all_spk, controller.speaker.rate, controller.speaker.channels, controller.speaker.sampwidth))
 
-    BASE_DIR = Path(__file__).resolve().parent
+    audio_bytes_info(all_mic, controller.mic.rate)
+    audio_bytes_info(all_spk, controller.speaker.rate)
 
-    MIC_PATH = BASE_DIR / "mic.wav"
-    SPEAKER_REC_PATH = BASE_DIR / "playback.wav"
-    TEST_PATH = BASE_DIR / "test.wav"
+    prep = SoundPacketBuilder(all_spk, rate=44100)
+    prep.prep_pck()
+    prep.write("audio.ulaw")
 
-    with wave.open(str(MIC_PATH), "wb") as wf:
-        wf.setnchannels(controller.mic.channels)
-        wf.setsampwidth(controller.mic.sampwidth)
-        wf.setframerate(controller.mic.rate)
-        wf.writeframes(all_mic)
+    ulaw = open("audio.ulaw", "rb").read()
+    pcm = audioop.ulaw2lin(ulaw, 2)
 
-    with wave.open(str(SPEAKER_REC_PATH), "wb") as wf:
-        wf.setnchannels(controller.speaker.channels)
-        wf.setsampwidth(controller.speaker.sampwidth)
-        wf.setframerate(controller.speaker.rate)
-        wf.writeframes(all_spk)
+    with wave.open("decoded.wav", "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframes(pcm)
 
-    # Example usage: pop and persist the next chunk pair.
-    popped_pair = controller.pop_chunk()
-    if popped_pair:
-        mic_chunk, spk_chunk = popped_pair
-        print("popped chunk lens:", len(mic_chunk), len(spk_chunk))
-        write_wav(str(BASE_DIR / "chunk_mic.wav"), mic_chunk,
-                rate=controller.mic.rate,
-                channels=controller.mic.channels,
-                sampwidth=controller.mic.sampwidth)
-        write_wav(str(BASE_DIR / "chunk_spk.wav"), spk_chunk,
-                rate=controller.speaker.rate,
-                channels=controller.speaker.channels,
-                sampwidth=controller.speaker.sampwidth)
+    # BASE_DIR = Path(__file__).resolve().parent
 
-    # Example usage: combined dual-channel (mic left, speaker-mono right).
-    popped_combined_dual = controller.pop_combined_dual()
-    if popped_combined_dual:
-        write_wav(str(BASE_DIR / "chunk_combined_dual.wav"), popped_combined_dual,
-                rate=controller.mic.rate,
-                channels=2,
-                sampwidth=controller.mic.sampwidth)
+    # MIC_PATH = BASE_DIR / "mic.wav"
+    # SPEAKER_REC_PATH = BASE_DIR / "playback.wav"
+    # TEST_PATH = BASE_DIR / "test.wav"
 
-    # Example usage: combined stereo mix (speaker stereo intact + mic mirrored to L/R).
-    popped_combined_stereo = controller.pop_combined_stereo()
-    if popped_combined_stereo:
-        write_wav(str(BASE_DIR / "chunk_combined_stereo.wav"), popped_combined_stereo,
-                rate=controller.mic.rate,
-                channels=2,
-                sampwidth=controller.mic.sampwidth)
+    # with wave.open(str(MIC_PATH), "wb") as wf:
+    #     wf.setnchannels(controller.mic.channels)
+    #     wf.setsampwidth(controller.mic.sampwidth)
+    #     wf.setframerate(controller.mic.rate)
+    #     wf.writeframes(all_mic)
+
+    # with wave.open(str(SPEAKER_REC_PATH), "wb") as wf:
+    #     wf.setnchannels(controller.speaker.channels)
+    #     wf.setsampwidth(controller.speaker.sampwidth)
+    #     wf.setframerate(controller.speaker.rate)
+    #     wf.writeframes(all_spk)
+
+    # # Example usage: pop and persist the next chunk pair.
+    # popped_pair = controller.pop_chunk()
+    # if popped_pair:
+    #     mic_chunk, spk_chunk = popped_pair
+    #     print("popped chunk lens:", len(mic_chunk), len(spk_chunk))
+    #     write_wav(str(BASE_DIR / "chunk_mic.wav"), mic_chunk,
+    #             rate=controller.mic.rate,
+    #             channels=controller.mic.channels,
+    #             sampwidth=controller.mic.sampwidth)
+    #     write_wav(str(BASE_DIR / "chunk_spk.wav"), spk_chunk,
+    #             rate=controller.speaker.rate,
+    #             channels=controller.speaker.channels,
+    #             sampwidth=controller.speaker.sampwidth)
+
+    # # Example usage: combined dual-channel (mic left, speaker-mono right).
+    # popped_combined_dual = controller.pop_combined_dual()
+    # if popped_combined_dual:
+    #     write_wav(str(BASE_DIR / "chunk_combined_dual.wav"), popped_combined_dual,
+    #             rate=controller.mic.rate,
+    #             channels=2,
+    #             sampwidth=controller.mic.sampwidth)
+
+    # # Example usage: combined stereo mix (speaker stereo intact + mic mirrored to L/R).
+    # popped_combined_stereo = controller.pop_combined_stereo()
+    # if popped_combined_stereo:
+    #     write_wav(str(BASE_DIR / "chunk_combined_stereo.wav"), popped_combined_stereo,
+    #             rate=controller.mic.rate,
+    #             channels=2,
+    #             sampwidth=controller.mic.sampwidth)
