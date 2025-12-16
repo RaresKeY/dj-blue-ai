@@ -28,6 +28,7 @@ dist-ssr
 
 # Managed Mem
 managed_mem.json
+managed_mem copy.json
 
 # Extra
 ui_ux_team/prototype_r/assets_d
