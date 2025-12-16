@@ -277,6 +277,7 @@ class LLMUtilitySuite:
                 contents=[prompt, audio_part],
                 generation_config=generation_config,
             )
+            self._log_usage(response, context="transcribe_audio")
         except Exception as e:
             return {
                 "error": f"An error occurred during transcription: {e}",
@@ -342,6 +343,7 @@ class LLMUtilitySuite:
                 contents=[prompt, audio_part],
                 generation_config=generation_config,
             )
+            self._log_usage(response, context="transcribe_audio_bytes")
         except Exception as e:
             return {
                 "error": f"An error occurred during transcription: {e}",
@@ -396,6 +398,32 @@ class LLMUtilitySuite:
                     except Exception:
                         continue
         return " ".join(parts).strip()
+
+    @staticmethod
+    def _log_usage(response: Any, *, context: str = "") -> None:
+        usage = getattr(response, "usage_metadata", None) or getattr(response, "usageMetadata", None)
+        if usage is None:
+            return
+
+        def _get(field: str):
+            if isinstance(usage, dict):
+                return usage.get(field)
+            return getattr(usage, field, None)
+
+        input_tokens = _get("input_token_count")
+        output_tokens = _get("output_token_count")
+        total_tokens = _get("total_token_count")
+
+        if any(val is not None for val in (input_tokens, output_tokens, total_tokens)):
+            parts: List[str] = []
+            if input_tokens is not None:
+                parts.append(f"input={input_tokens}")
+            if output_tokens is not None:
+                parts.append(f"output={output_tokens}")
+            if total_tokens is not None:
+                parts.append(f"total={total_tokens}")
+            label = f"[{context}] " if context else ""
+            print(f"LLM usage {label}{', '.join(parts)}")
 
     @staticmethod
     def _build_generation_config(response_schema) -> Optional[Any]:

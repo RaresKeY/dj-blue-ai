@@ -953,6 +953,7 @@ class MainUI(QWidget):
 
     def _update_transcript_mem(self, new_seg=None):
         transcript_key = 'transcript_sessions'
+        # TODO: ManagedMem.gettr triggers log + auto-flush, causing file writes even on read
         mem_segments = self.man_mem.gettr(transcript_key) or dict()
         if not isinstance(mem_segments, dict):
             mem_segments = dict()
@@ -966,9 +967,7 @@ class MainUI(QWidget):
         mem_segments.setdefault(session, [])
         mem_segments[session].append(segs)
 
-        # TODO: file write via ManagedMem persistence when re-enabled (currently disabled)
-        # FIX THE HEAVY WRITES FIRST !!!
-        # self.man_mem.settr(transcript_key, mem_segments)
+        self.man_mem.settr(transcript_key, mem_segments)
 
     def open_transcript(self):
         if self._show_transcript_window is False:
@@ -1033,7 +1032,7 @@ class MainUI(QWidget):
                     result.pop("raw_response", None)
                     result.pop("source", None)
                     result.pop("model", None)
-                    self._update_transcript_mem(result)
+                    # self._update_transcript_mem(result)
 
                 print("--- DEBUG TRANSCRIPT")
                 print(result)

@@ -20,6 +20,10 @@ from typing import Any, List, Optional
 
 from .jsonrules_song import make_json_safe, restore_from_json
 
+# TODO: Dampen massive disk usage and huge json files used currently
+# TODO: Separate logging to different file
+# TODO: Explore using proper DB solutions, lazy writes, etc... ie. optimize
+
 """ 
 Complex Usage:
 ---------------
