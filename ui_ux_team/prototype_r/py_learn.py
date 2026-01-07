@@ -4,6 +4,7 @@ import time
 import sys
 import os
 import wave
+import json
 from io import BytesIO
 
 from dotenv import load_dotenv
@@ -33,13 +34,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from architects.helpers.audio_utils import (
-    PlaybackController, RecordingController, 
-    PlaybackRecorderLinux, AudioController,
-    SoundPacketBuilder
-)
+from architects.helpers.audio_utils import PlaybackController
+from architects.helpers.transcription_manager import TranscriptionManager
 from architects.helpers.tabs_audio import get_display_names
-from architects.helpers.api_utils import LLMUtilitySuite
 from architects.helpers.managed_mem import ManagedMem
 
 # ---- Dark Theme Color Constants ----
@@ -81,16 +78,6 @@ COLOR_BLUE_BIRD      = "#1565C0"   # was: "blue"
 BASE = os.path.dirname(__file__)
 IMAGE_NOT_FOUND = os.path.join(BASE, "assets/image_not_found_white.png")
 
-
-def _pcm_to_wav_bytes(pcm, *, rate, channels, sampwidth):
-    # TODO: file write target (in-memory) when serializing PCM to WAV frames
-    buf = BytesIO()
-    with wave.open(buf, "wb") as wf:
-        wf.setnchannels(channels)
-        wf.setsampwidth(sampwidth)
-        wf.setframerate(rate)
-        wf.writeframes(pcm)
-    return buf.getvalue()
 
 class ImageButton(QLabel):
     clicked = Signal()
@@ -890,7 +877,7 @@ class BlueBirdChat(QWidget):
 
 
 class MainUI(QWidget):
-    transcript_ready = Signal(str)
+    transcript_ready = Signal(dict)
 
     def __init__(self):
         super().__init__()
@@ -913,12 +900,17 @@ class MainUI(QWidget):
         # music player
         self._player = None
         self._paused = False
+        self._currently_playing = "deep_purple_smoke_on_the_water.wav"
 
-        # audio recorder
-        self._recorder = None
-        self.run_test_thread = False
+        # Transcription Manager
+        self.transcription_manager = None
+        
+        # mood selection
+        self.mood_map = None
+        with open("mood_readers/data/mood_playlists_organized.json", 'r', encoding='utf-8') as f:
+            self.mood_map = json.load(f)
 
-        # childrens windows/menus V
+        # childrens windows/menus
         # transcript window
         self._transcript_win = TranscriptWindow(parent=self)
         self._transcript_win.closed.connect(lambda: setattr(self, "_transcript_win", None))
@@ -928,25 +920,94 @@ class MainUI(QWidget):
         self._current_session_segments = []
         self._current_session = f"SESSION [{self.man_mem.timestamp_helper()}]"
 
-        # route worker thread transcript strings safely to the UI thread
-        self.transcript_ready.connect(self._transcript_win.add_transcript_segment)
+        # Route transcript data to MainUI handler
+        self.transcript_ready.connect(self.handle_transcript_data)
 
         self._bluebird_chat = None
         self._settings_menu = None
         self._meet_type = None
 
-        # API Utils
+        # API Utils / Transcription
         api_key = self.load_api_key()
-        self._llm_utils = None
         if not api_key:
-            print("Missing API Key, LLMUtilitySuite not open")
+            print("Missing API Key, TranscriptionManager not initialized")
         else:
-            self._llm_utils = LLMUtilitySuite(api_key)
+            self.transcription_manager = TranscriptionManager(api_key)
+            self.transcription_manager.set_callback(self.transcript_ready.emit)
+
+    def basic_music_play(self, music_path):
+        self._currently_playing = music_path
+        if self._player is None:
+            self._play_btn.set_image("assets/pause.png")
+            audio_path = Path(__file__).with_name(self._currently_playing)
+            self._player = PlaybackController(str(audio_path))
+            self._player.start()
+
+            print(f"Playing Music: {self._currently_playing}")
+        else:
+            pass
+
+    def handle_transcript_data(self, data: dict):
+        """
+        Slot to handle the raw transcription data dictionary.
+        Distributes data to various UI components.
+        """
+        # 1. Update Transcript Window
+        text = TranscriptionManager.format_transcript_text(data)
+        if text:
+            # We must ensure the window exists/is receiving updates
+            self._transcript_win.add_transcript_segment(text)
+
+        mood_mapper_key = {
+            "positive": "😊 positive", 
+            "neutral": "😐 neutral", 
+            "tense": "😠 tense",
+            "unfocused":"😴 unfocused", 
+            "collaborative": "🤝 collaborative", 
+            "creative": "💡 creative", 
+            "unproductive": "📉 unproductive",
+            "melancholic": "😢 melancholic",
+            "nostalgic": "😢 nostalgic",
+            "sad": "😢 sad",
+        }
+
+        mood_mapper_display = {
+            "positive": "😊 Positive", 
+            "neutral": "😐 Neutral", 
+            "tense": "😠 Tense",
+            "unfocused":"😴 Unfocused", 
+            "collaborative": "🤝 Collaborative", 
+            "creative": "💡 Creative", 
+            "unproductive": "📉 Unproductive",
+            "melancholic": "😢 Melancholic",
+            "nostalgic": "😢 Nostalgic",
+            "sad": "😢 Sad",
+        }
+
+        # 2. Update Mood Marque
+        mood = data.get("emotion")
+        if mood:
+            print(f"Received mood update: {mood}")
+            self.mood_tag.set_queue([mood_mapper_display[mood]])
+            self.mood_tag.hold_ms = 100_000
+            # Example: self.mood_tag.enqueue(mood) or similar
+
+        # 3. Play Music based on current Mood (Simple)
+        # TODO: implement proper music controller component outside py_learn
+        if mood and mood in mood_mapper_key:
+            music_data = self.mood_map[mood_mapper_key[mood]]
+            music_path = random.choice(music_data)
+        else:
+            music_path = "ui_ux_team/prototype_r/deep_purple_smoke_on_the_water.wav"
+        
+        self.basic_music_play(music_path)
 
     @staticmethod
     def load_api_key():
-        load_dotenv()
-        os.environ["AI_STUDIO_API_KEY"] = os.getenv("AI_STUDIO_API_KEY", "")
+        # settings runs hybrid keyring then .env loadenv flow
+        import settings
+        # load_dotenv()
+        # os.environ["AI_STUDIO_API_KEY"] = os.getenv("AI_STUDIO_API_KEY", "")
         api_key = os.getenv("AI_STUDIO_API_KEY")
 
         return api_key
@@ -985,74 +1046,16 @@ class MainUI(QWidget):
         self._show_transcript_window = False
 
     def record_transcript(self):
-        if self._recorder is None:
-            self._recorder = AudioController(chunk_seconds=30)
-            self._recorder.start()
-            print('recording ... transcript up')
+        if not self.transcription_manager:
+            print("TranscriptionManager not available (check API key)")
+            return
 
-            # test thread to check
-            self.run_test_thread = True
-            t = threading.Thread(target=self.transcript_worker, daemon=True)
-            t.start()
-
+        if not self.transcription_manager.is_recording():
+            self.transcription_manager.start_recording()
+            print('recording...')
         else:
-            self.run_test_thread = False
-            self._recorder.stop()
-            self._recorder.close()
-            self._recorder = None
+            self.transcription_manager.stop_recording()
             print('recording stopped')
-
-    def transcript_worker(self):
-        while self.run_test_thread:
-            if self._recorder.chunks:
-                print("transcribing...")
-                audio_bytes = self._recorder.pop_combined_stereo()
-                result = {"text": None, "summary": None, "emotion": None}
-
-                if audio_bytes:
-                    wav_bytes = _pcm_to_wav_bytes(audio_bytes,
-                        rate=self._recorder.mic.rate,
-                        channels=2,
-                        sampwidth=self._recorder.mic.sampwidth)
-
-                    # TODO: make SoundPacketBuilder a Singleton and initialize in __init__
-                    packet = SoundPacketBuilder(audio_bytes,
-                        rate=self._recorder.mic.rate,
-                        channels=2,
-                        sampwidth=self._recorder.mic.sampwidth)
-                    compressed_bytes = packet.prep_pck()
-                    print(f"compressed audio prepared ({len(compressed_bytes)} bytes)")
-
-                    result = self._llm_utils.transcribe_audio_bytes(
-                        wav_bytes,
-                        mime_type="audio/wav",
-                        model_name="models/gemini-2.5-flash",
-                        structured=True,
-                    )
-                    result.pop("raw_response", None)
-                    result.pop("source", None)
-                    result.pop("model", None)
-                    # self._update_transcript_mem(result)
-
-                print("--- DEBUG TRANSCRIPT")
-                print(result)
-                print("-------- END -------\n")
-
-                def parse_none(txt):
-                    if isinstance(txt, str):
-                        return txt
-                    else:
-                        return "MISSING"
-
-                if result.get("text"):
-                    self.transcript_ready.emit("Transcript:\n" + parse_none(result.get("text")) + '\n\n' +
-                                               "Translation:\n" + parse_none(result.get("translation", "MISSING")) + '\n\n' +
-                                               "Summary:\n" + parse_none(result.get("summary", "MISSING")) + '\n\n' +
-                                               "Emotion: " + parse_none(result.get("emotion", "MISSING")) + '\n' + "---\n")
-                else:
-                    print("DEBUG: missing transcript text OR not speech detected")
-
-            time.sleep(1)
 
     def meet_type_menu(self, parent):
         if self._meet_type is None:
@@ -1100,8 +1103,6 @@ class MainUI(QWidget):
         ]
 
         FloatingToast(self).show_message(random.choice(mood_items))
-
-        pass
 
     def build_sidebar(self):
         # depth 1
@@ -1187,7 +1188,10 @@ class MainUI(QWidget):
         self._player = None
         print("Stopping")
 
-    def play_click(self, file_path="deep_purple_smoke_on_the_water.wav"):
+    def play_click(self, file_path=None):
+        if file_path is None:
+            file_path = self._currently_playing
+
         if self._player is None:
             self._play_btn.set_image("assets/pause.png")
             audio_path = Path(__file__).with_name(file_path)
@@ -1290,7 +1294,7 @@ class MainUI(QWidget):
             "📉 Unproductive",
         ]
 
-        mood_tag = QueuedMarqueeLabel(
+        self.mood_tag = QueuedMarqueeLabel(
             mood_items,
             hold_ms=3200,
             fade_ms=220,
@@ -1300,14 +1304,14 @@ class MainUI(QWidget):
         )
         font = QFont()
         font.setPointSize(20)
-        mood_tag.label.setFont(font)
-        mood_tag.setMaximumHeight(30)
+        self.mood_tag.label.setFont(font)
+        self.mood_tag.setMaximumHeight(30)
 
         covers = self.build_cover_images()
         timeline_box = self.build_main_timeline()
         bottom_panel = self.build_main_bottom_panel()
 
-        l_main.addWidget(mood_tag)
+        l_main.addWidget(self.mood_tag)
         l_main.addWidget(covers, alignment=Qt.AlignCenter | Qt.AlignBottom)
         l_main.addWidget(timeline_box)
         l_main.addWidget(bottom_panel)
