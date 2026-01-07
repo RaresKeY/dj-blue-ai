@@ -58,3 +58,15 @@ music_librarians/temp_music
 music_librarians/yt_dlp_test
 
 mood_readers/deep_purple_smoke_on_the_water.wav
+architects/audio_capture_demos.ipynb
+architects/design_docs/audio_components.md
+architects/design_docs/duplicate_components.md
+architects/helpers/crypto_utils.py
+architects/helpers/native_wave_player.py
+architects/helpers/proc_player.py
+architects/helpers_capture_app/
+architects/platform_detection/
+architects/system_recorders/
+ui_ux_team/prototype_r/rnnt_models/
+transcribers/ai_studio_transcriber.py
+transcribers/test_ai_studio_transcriber.py
