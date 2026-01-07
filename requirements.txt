@@ -2,3 +2,5 @@ google-generativeai
 packaging
 numpy
 pyaudio
+pyside6
+miniaudio

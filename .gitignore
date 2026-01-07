@@ -30,6 +30,31 @@ dist-ssr
 managed_mem.json
 managed_mem copy.json
 
-# Extra
+# Misc / Extra
 ui_ux_team/prototype_r/assets_d
 ui_ux_team/prototype_r/button_test.py
+
+mood_readers/data/mp3_metadata_analyzed.json
+mood_readers/data/mp3_metadata.json
+mood_readers/data/test_transcript.json
+mood_readers/data/mood_tags_test.json
+mood_readers/data/mood_playlists.json
+
+# Intermiedary fast process files
+mood_readers/organize_mood_music.py
+mood_readers/process_camelot.py
+mood_readers/create_mood_playlists.py
+
+# Keyring setup (Linux ONLY)
+setup_keys.py
+.aider*
+
+# Large music collection for testing ONLY
+mood_music_collection
+
+# Music d experiments temp
+music_librarians/query_sites
+music_librarians/temp_music
+music_librarians/yt_dlp_test
+
+mood_readers/deep_purple_smoke_on_the_water.wav
