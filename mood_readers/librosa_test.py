@@ -213,6 +213,11 @@ class LibrosaBatchGUI(QMainWindow):
         self.stop_button.setEnabled(False)
         control_layout.addWidget(self.stop_button)
 
+        self.save_button = QPushButton("Salvează Rezultatele…")
+        self.save_button.clicked.connect(self._save_results_to_file)
+        self.save_button.setEnabled(False)
+        control_layout.addWidget(self.save_button)
+
         main_layout.addLayout(control_layout)
 
         # 2. Zona de Liste (Fișiere și Rezultate)
@@ -272,6 +277,7 @@ class LibrosaBatchGUI(QMainWindow):
         self.results_text.clear()
         self.analyze_button.setEnabled(False)
         self.status_label.setText("Listă curățată. Adaugă fișiere noi.")
+        self._update_save_button_state()
 
     def _start_analysis(self):
         """Porneste analiza în lot (batch) intr-un thread separat."""
@@ -285,6 +291,7 @@ class LibrosaBatchGUI(QMainWindow):
         self.clear_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         self.results_text.clear()
+        self._update_save_button_state()
 
         # Porneste Worker-ul de Analiză (cu lista de fișiere)
         self.worker_thread = BatchAnalysisWorker(self.file_paths)
@@ -312,6 +319,7 @@ class LibrosaBatchGUI(QMainWindow):
             f"{'-' * 40}\n"
         )
         self.results_text.append(output)  # Folosim append() pentru a adăuga la log
+        self._update_save_button_state()
 
     def _handle_batch_complete(self, successful: int, failed: int):
         """Se apelează când tot lotul este gata."""
@@ -321,10 +329,12 @@ class LibrosaBatchGUI(QMainWindow):
         self.results_text.append(f"Fișiere eșuate: {failed}")
 
         self._reset_buttons()
+        self._update_save_button_state()
 
     def _display_error(self, message: str):
         """Afișează o eroare în jurnal (log)."""
         self.results_text.append(f"!!! EROARE: {message}\n{'-' * 40}\n")
+        self._update_save_button_state()
 
     def _reset_buttons(self):
         """Resetează butoanele la starea inițială."""
@@ -332,6 +342,37 @@ class LibrosaBatchGUI(QMainWindow):
         self.browse_button.setEnabled(True)
         self.clear_button.setEnabled(True)
         self.stop_button.setEnabled(False)
+        self._update_save_button_state()
+
+    def _update_save_button_state(self):
+        """Activează butonul de salvare doar când există conținut în jurnal."""
+        has_content = bool(self.results_text.toPlainText().strip())
+        self.save_button.setEnabled(has_content)
+
+    def _save_results_to_file(self):
+        """Permite utilizatorului să salveze jurnalul curent într-un fișier text."""
+        content = self.results_text.toPlainText().strip()
+        if not content:
+            QMessageBox.information(self, "Nimic de salvat", "Nu există rezultate de exportat încă.")
+            return
+
+        default_name = str(Path.home() / "rezultate_librosa.txt")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Salvează rezultatele analizelor",
+            default_name,
+            "Text Files (*.txt);;All Files (*)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, "w", encoding="utf-8") as file_handler:
+                file_handler.write(content + "\n")
+            QMessageBox.information(self, "Succes", f"Rezultatele au fost salvate în:\n{file_path}")
+        except OSError as exc:
+            QMessageBox.critical(self, "Eroare la salvare", f"Nu s-a putut salva fișierul:\n{exc}")
 
 
 if __name__ == "__main__":
@@ -339,6 +380,5 @@ if __name__ == "__main__":
     window = LibrosaBatchGUI()
     window.show()
     sys.exit(app.exec())
-
 
 
