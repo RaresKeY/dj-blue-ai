@@ -89,7 +89,7 @@ def _start_transcription(wav_path: Path, whisper: WhisperEngine) -> None:
 
 
 def main() -> None:
-    suppress_alsa_warnings()
+    suppress_alsa_warnings() # TODO: configure dist
     app = QCoreApplication(sys.argv)
 
     devices = list_all_devices()
