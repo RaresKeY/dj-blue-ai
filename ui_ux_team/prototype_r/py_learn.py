@@ -34,7 +34,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from architects.helpers.audio_utils import PlaybackController
+from architects.helpers.miniaudio_player import MiniaudioPlayer
 from architects.helpers.transcription_manager import TranscriptionManager
 from architects.helpers.tabs_audio import get_display_names
 from architects.helpers.managed_mem import ManagedMem
@@ -936,16 +936,35 @@ class MainUI(QWidget):
             self.transcription_manager.set_callback(self.transcript_ready.emit)
 
     def basic_music_play(self, music_path):
-        self._currently_playing = music_path
-        if self._player is None:
-            self._play_btn.set_image("assets/pause.png")
-            audio_path = Path(__file__).with_name(self._currently_playing)
-            self._player = PlaybackController(str(audio_path))
-            self._player.start()
+        # Resolve path relative to project root if needed
+        clean_path = music_path
+        if clean_path.startswith("./"):
+             clean_path = clean_path[2:]
+        
+        # Try resolving against PROJECT_ROOT
+        real_path = PROJECT_ROOT / clean_path
+        
+        # Fallback for legacy relative paths (if any) or simple filenames
+        if not real_path.exists():
+             real_path = Path(__file__).parent / clean_path
 
-            print(f"Playing Music: {self._currently_playing}")
-        else:
-            pass
+        if not real_path.exists():
+             print(f"Music file not found: {real_path}")
+             return
+
+        # If already playing this track, ensure it is playing
+        if self._player and self._currently_playing == music_path and self._player.is_playing():
+             return
+
+        if self._player:
+            self._player.stop()
+        
+        self._currently_playing = music_path
+        self._play_btn.set_image("assets/pause.png")
+        self._player = MiniaudioPlayer(str(real_path))
+        self._player.start()
+
+        print(f"Playing Music: {self._currently_playing}")
 
     def handle_transcript_data(self, data: dict):
         """
@@ -988,19 +1007,29 @@ class MainUI(QWidget):
         mood = data.get("emotion")
         if mood:
             print(f"Received mood update: {mood}")
-            self.mood_tag.set_queue([mood_mapper_display[mood]])
-            self.mood_tag.hold_ms = 100_000
-            # Example: self.mood_tag.enqueue(mood) or similar
+            if mood in mood_mapper_display:
+                self.mood_tag.set_queue([mood_mapper_display[mood]])
+                self.mood_tag.hold_ms = 100_000
 
-        # 3. Play Music based on current Mood (Simple)
-        # TODO: implement proper music controller component outside py_learn
-        if mood and mood in mood_mapper_key:
-            music_data = self.mood_map[mood_mapper_key[mood]]
-            music_path = random.choice(music_data)
-        else:
-            music_path = "ui_ux_team/prototype_r/deep_purple_smoke_on_the_water.wav"
-        
-        self.basic_music_play(music_path)
+            # 3. Play Music based on current Mood (Simple)
+            # Check last mood to prevent skipping on every segment
+            last_mood = getattr(self, "_last_mood", None)
+            
+            if mood != last_mood:
+                self._last_mood = mood
+                music_path = None
+                
+                if mood in mood_mapper_key:
+                    music_data = self.mood_map[mood_mapper_key[mood]]
+                    if music_data:
+                        music_path = random.choice(music_data)
+                
+                # If no specific mood music found, or mood not in key, fallback if nothing playing
+                if not music_path and (self._player is None or not self._player.is_playing()):
+                     music_path = "ui_ux_team/prototype_r/deep_purple_smoke_on_the_water.wav"
+
+                if music_path:
+                    self.basic_music_play(music_path)
 
     @staticmethod
     def load_api_key():
@@ -1195,7 +1224,7 @@ class MainUI(QWidget):
         if self._player is None:
             self._play_btn.set_image("assets/pause.png")
             audio_path = Path(__file__).with_name(file_path)
-            self._player = PlaybackController(str(audio_path))
+            self._player = MiniaudioPlayer(str(audio_path))
             self._player.start()
 
             print("Playing Music...")
