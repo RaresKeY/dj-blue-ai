@@ -232,7 +232,7 @@ class LLMUtilitySuite:
         self,
         audio_source: Union[str, Path, bytes],
         *,
-        model_name: str = "models/gemini-2.5-flash",
+        model_name: str = "models/gemini-2.5-flash-lite",
         prompt: Optional[str] = None,
         mime_type: Optional[str] = None,
         structured: bool = True,

@@ -107,7 +107,7 @@ class TranscriptionManager:
             result = self._llm_utils.transcribe_audio_bytes(
                 wav_bytes,
                 mime_type="audio/wav",
-                model_name="models/gemini-2.5-flash",
+                model_name="models/gemini-2.5-flash-lite",
                 structured=True,
             )
             
