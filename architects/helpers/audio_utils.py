@@ -609,6 +609,19 @@ def audio_bytes_info(
     }
 
 
+def pcm_to_wav_bytes(pcm: bytes, *, rate: int, channels: int, sampwidth: int) -> bytes:
+    """
+    Convert raw PCM bytes to a WAV file in memory (bytes).
+    """
+    buf = BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(sampwidth)
+        wf.setframerate(rate)
+        wf.writeframes(pcm)
+    return buf.getvalue()
+
+
 if __name__ == "__main__":
     AUDIO_PATH = Path(__file__).with_name("out.wav")
     wav_bytes = open(AUDIO_PATH, "rb").read()
