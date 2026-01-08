@@ -17,6 +17,7 @@ Requirements:
 2. If the recording is in a language different than English, also provide the English translation.
 3. Identify the primary emotion of the speaker in this recording. You MUST choose exactly one of the following: {MEET_TYPE_MOODS}.
 4. Provide a brief summary of the entire audio at the beginning.
+5. Do no hallucinate speech if the audio is silent.
 
 Respond ONLY as JSON matching:
 {{
@@ -305,7 +306,7 @@ class LLMUtilitySuite:
         self,
         audio_bytes: bytes,
         *,
-        model_name: str = "models/gemini-2.5-flash",
+        model_name: str = "models/gemini-2.5-flash-lite",
         prompt: Optional[str] = None,
         mime_type: str = "audio/mp3",
         structured: bool = True,
