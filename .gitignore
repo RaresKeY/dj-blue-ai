@@ -57,6 +57,7 @@ music_librarians/query_sites
 music_librarians/temp_music
 music_librarians/yt_dlp_test
 
+# To Organize
 mood_readers/deep_purple_smoke_on_the_water.wav
 architects/audio_capture_demos.ipynb
 architects/design_docs/audio_components.md
@@ -65,8 +66,40 @@ architects/helpers/crypto_utils.py
 architects/helpers/native_wave_player.py
 architects/helpers/proc_player.py
 architects/helpers_capture_app/
-architects/platform_detection/
 architects/system_recorders/
 ui_ux_team/prototype_r/rnnt_models/
 transcribers/ai_studio_transcriber.py
 transcribers/test_ai_studio_transcriber.py
+ui_ux_team/prototype_r/test_transcript.txt
+ui_ux_team/prototype_r/blue_bird_chat_streamlit.py
+
+# TEMP (TBD)
+audio.ulaw
+decoded.wav
+architects/system_recorder_cli.py
+architects/helpers/out.wav
+mood_readers/api_tests.py
+mood_readers/mood_reader.py
+mood_readers/test.wav
+mood_readers/data/mp3_metadata_analyzed_out.json
+mood_readers/data/system_prompt.json
+ui_ux_team/prototype_r/audio_learn_play.py
+ui_ux_team/prototype_r/audio_learn_record_mic.py
+ui_ux_team/prototype_r/audio_learn_record_speakers_mult.py
+ui_ux_team/prototype_r/audio_learn_record_speakers.py
+ui_ux_team/prototype_r/categorize_music.py
+ui_ux_team/prototype_r/chunk_combined_stereo.wav
+ui_ux_team/prototype_r/chunk_combined.wav
+ui_ux_team/prototype_r/chunk_mic.wav
+ui_ux_team/prototype_r/chunk_spk.wav
+ui_ux_team/prototype_r/mic.wav
+ui_ux_team/prototype_r/out.wav
+ui_ux_team/prototype_r/packet_manager.py
+ui_ux_team/prototype_r/playback.wav
+ui_ux_team/prototype_r/py_learn_changes.md
+ui_ux_team/prototype_r/rnn_t_onnx_whisper.py
+ui_ux_team/prototype_r/rnn_t_onnx.py
+ui_ux_team/prototype_r/temp.wav
+ui_ux_team/prototype_r/testing.ipynb
+ui_ux_team/prototype_r/testing2.ipynb
+ui_ux_team/prototype_r/todos.md

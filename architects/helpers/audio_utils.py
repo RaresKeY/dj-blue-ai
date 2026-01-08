@@ -11,6 +11,7 @@ import struct
 import wave
 import time
 import math
+from architects.helpers.record_live_mix_linux import LiveMixer, RATE, CHANNELS
 
 _USE_EXISTING_DURATION = object()
 
@@ -261,6 +262,98 @@ class PlaybackRecorderLinux:
         self.thread = None
 
 
+class MultiPlaybackRecorder:
+    """
+    Manages multiple PlaybackRecorderLinux instances and mixes their output.
+    Used when multiple source monitors are selected.
+    """
+    def __init__(self, monitors: List[str], rate=44100, channels=2, sampwidth=2):
+        self.recorders = [
+            PlaybackRecorderLinux(monitor=m, rate=rate, channels=channels, sampwidth=sampwidth) 
+            for m in monitors
+        ]
+        self.chunks = []
+        self.paused = False
+        self.stopped = False
+        self.rate = rate
+        self.channels = channels
+        self.sampwidth = sampwidth
+        
+        self._mixer_thread = None
+        self._mixer_active = False
+
+    def start(self, duration=None):
+        for rec in self.recorders:
+            rec.start(duration)
+            
+        self.chunks = []
+        self.stopped = False
+        self.paused = False
+        self._mixer_active = True
+        
+        self._mixer_thread = threading.Thread(target=self._mixer_loop, daemon=True)
+        self._mixer_thread.start()
+
+    def _mixer_loop(self):
+        while self._mixer_active and not self.stopped:
+            # Find the minimum number of chunks available across all recorders
+            # We can only mix up to the point where all recorders have data
+            if not self.recorders:
+                break
+                
+            min_len = min(len(r.chunks) for r in self.recorders)
+            current_processed = len(self.chunks)
+            
+            if min_len > current_processed:
+                for i in range(current_processed, min_len):
+                    # Start with the first recorder's chunk
+                    mixed_chunk = self.recorders[0].chunks[i]
+                    
+                    # Add remaining recorders
+                    for rec in self.recorders[1:]:
+                        chunk_to_add = rec.chunks[i]
+                        
+                        # Ensure lengths match before mixing (though they should be consistent from parec)
+                        len_a = len(mixed_chunk)
+                        len_b = len(chunk_to_add)
+                        if len_a != len_b:
+                            common = min(len_a, len_b)
+                            mixed_chunk = mixed_chunk[:common]
+                            chunk_to_add = chunk_to_add[:common]
+                            
+                        mixed_chunk = audioop.add(mixed_chunk, chunk_to_add, self.sampwidth)
+                        
+                    self.chunks.append(mixed_chunk)
+            
+            time.sleep(0.01)
+
+    def pause(self):
+        self.paused = True
+        for r in self.recorders:
+            r.pause()
+
+    def resume(self):
+        self.paused = False
+        for r in self.recorders:
+            r.resume()
+
+    def stop(self):
+        self.stopped = True
+        self._mixer_active = False
+        for r in self.recorders:
+            r.stop()
+        if self._mixer_thread:
+            self._mixer_thread.join()
+
+    def get_pcm(self):
+        return b"".join(self.chunks)
+
+    def close(self):
+        self.stop()
+        for r in self.recorders:
+            r.close()
+
+
 class AudioController:
     """
     Orchestrates mic + speaker recording in fixed chunks.
@@ -273,6 +366,7 @@ class AudioController:
         *,
         chunk_seconds: int = 30,
         monitor: Optional[str] = None,
+        monitors: Optional[List[str]] = None,
         rate: int = 44100,
         mic_channels: int = 1,
         speaker_channels: int = 2,
@@ -281,13 +375,22 @@ class AudioController:
         self.chunk_seconds = chunk_seconds
 
         self.mic = RecordingController(rate=rate, chunk=mic_chunk, channels=mic_channels)
-        self.speaker = PlaybackRecorderLinux(
-            duration=None,  # keep open until stopped
-            rate=rate,
-            channels=speaker_channels,
-            sampwidth=2,
-            monitor=monitor,
-        )
+        
+        if monitors and len(monitors) > 0:
+            self.speaker = MultiPlaybackRecorder(
+                monitors=monitors,
+                rate=rate,
+                channels=speaker_channels,
+                sampwidth=2
+            )
+        else:
+            self.speaker = PlaybackRecorderLinux(
+                duration=None,  # keep open until stopped
+                rate=rate,
+                channels=speaker_channels,
+                sampwidth=2,
+                monitor=monitor,
+            )
 
         self._chunks: List[Tuple[bytes, bytes]] = []
         self._stop_event = threading.Event()
@@ -464,6 +567,76 @@ class AudioController:
             return None
         mic_chunk, spk_chunk = chunk
         return self._combine_stereo_mix(mic_chunk, spk_chunk)
+
+
+class LiveMixerController:
+    """
+    Linux-only controller using the LiveMixer for dynamic app/mic discovery and mixing.
+    Follows a similar interface to AudioController for compatibility.
+    """
+    def __init__(self, chunk_seconds: int = 30, rate: int = RATE, channels: int = CHANNELS, blacklist: Optional[List[str]] = None):
+        self.chunk_seconds = chunk_seconds
+        self.rate = rate
+        self.channels = channels
+        self.sampwidth = 2
+        self.blacklist = blacklist
+        
+        self.mixer = None
+        self._chunks: List[bytes] = []
+        self._stop_event = threading.Event()
+        self._chunk_thread: Optional[threading.Thread] = None
+        self._started = False
+
+    def start(self):
+        if self._started:
+            return
+        self.mixer = LiveMixer(blacklist=self.blacklist)
+        self._stop_event.clear()
+        self._chunks.clear()
+        
+        self._chunk_thread = threading.Thread(target=self._chunk_loop, daemon=True)
+        self._chunk_thread.start()
+        self._started = True
+
+    def _chunk_loop(self):
+        while not self._stop_event.wait(self.chunk_seconds):
+            pcm = self.mixer.pop_buffer()
+            if pcm:
+                self._chunks.append(pcm)
+
+    def stop(self):
+        if not self._started:
+            return
+        self._stop_event.set()
+        if self._chunk_thread:
+            self._chunk_thread.join()
+            
+        # Final pop
+        if self.mixer:
+            pcm = self.mixer.pop_buffer()
+            if pcm:
+                self._chunks.append(pcm)
+            self.mixer.stop()
+            
+        self._started = False
+
+    def close(self):
+        self.stop()
+        self.mixer = None
+
+    def pop_combined_stereo(self) -> Optional[bytes]:
+        if not self._chunks:
+            return None
+        return self._chunks.pop(0)
+
+    @property
+    def mic(self):
+        # Mock mic object for compatibility with TranscriptionManager's rate/sampwidth access
+        class MockMic:
+            def __init__(self, rate, sampwidth):
+                self.rate = rate
+                self.sampwidth = sampwidth
+        return MockMic(self.rate, self.sampwidth)
 
 
 # Network requests packet controller/scheduler
