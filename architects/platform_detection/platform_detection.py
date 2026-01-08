@@ -26,4 +26,5 @@ def os_info():
 
     return info
 
-print(os_info())
+if __name__ == "__main__":
+    print(os_info())

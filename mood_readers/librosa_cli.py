@@ -3,6 +3,7 @@
 import argparse
 import csv
 import sys
+import io
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
@@ -73,30 +74,18 @@ def get_detailed_mood(bpm: int, is_major: bool) -> str:
             return "Sad / Dark (Low Arousal)"
 
 
-def analyze_audio_file_logic(file_path: str) -> dict:
-    """Function that runs Librosa calculations and returns a dictionary of results."""
-
-    # OPTIMIZATION: Analyze a representative chunk (e.g., 45s from middle)
-    # and use a lower sample rate (22050 Hz is standard for feature extraction).
-    target_sr = 22050
-    analyze_duration = 45.0
-    
-    try:
-        # Quickly get duration to find the middle
-        # Note: librosa.get_duration(path=...) works in newer librosa versions.
-        # If it fails, we fall back to loading from start.
-        total_duration = librosa.get_duration(path=file_path)
-        offset = max(0, (total_duration - analyze_duration) / 2)
-    except Exception:
-        # Fallback: Just load the first 45 seconds if duration check fails
-        offset = 0.0
-
-    # Load only the specific segment
-    y, sr = librosa.load(file_path, sr=target_sr, mono=True, offset=offset, duration=analyze_duration)
-
+def _analyze_signal(y: np.ndarray, sr: int) -> dict:
+    """Internal logic to extract features from loaded audio signal."""
     # 1. BPM DETECTION
-    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-    bpm = int(tempo[0])  # __round__ correction
+    try:
+        tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+        # Handle different librosa versions where tempo might be scalar or array
+        if np.ndim(tempo) > 0:
+             bpm = int(tempo[0])
+        else:
+             bpm = int(tempo)
+    except Exception:
+        bpm = 0
 
     # 2. KEY DETECTION
     chroma = librosa.feature.chroma_cens(y=y, sr=sr)
@@ -129,9 +118,54 @@ def analyze_audio_file_logic(file_path: str) -> dict:
         "bpm": bpm,
         "key_technical": best_key,
         "key_camelot": camelot_code,
-        "valence": valence_simple,  # Keep simple valence as well
-        "mood_detailed": mood_detailed  # Add the new detailed mood
+        "valence": valence_simple,
+        "mood_detailed": mood_detailed
     }
+
+
+def analyze_audio_bytes_logic(audio_bytes: bytes) -> dict:
+    """
+    Analyzes audio bytes directly (WAV/MP3/etc formats expected).
+    Useful for in-memory processing without temp files.
+    """
+    target_sr = 22050
+    try:
+        # Wrap bytes in BytesIO so librosa/soundfile can read it
+        audio_file = io.BytesIO(audio_bytes)
+        y, sr = librosa.load(audio_file, sr=target_sr, mono=True)
+        return _analyze_signal(y, sr)
+    except Exception as e:
+        return {
+            "bpm": 0,
+            "key_technical": "Error",
+            "key_camelot": "N/A",
+            "valence": "Error",
+            "mood_detailed": f"Error: {str(e)}"
+        }
+
+
+def analyze_audio_file_logic(file_path: str) -> dict:
+    """Function that runs Librosa calculations and returns a dictionary of results."""
+
+    # OPTIMIZATION: Analyze a representative chunk (e.g., 45s from middle)
+    # and use a lower sample rate (22050 Hz is standard for feature extraction).
+    target_sr = 22050
+    analyze_duration = 45.0
+    
+    try:
+        # Quickly get duration to find the middle
+        # Note: librosa.get_duration(path=...) works in newer librosa versions.
+        # If it fails, we fall back to loading from start.
+        total_duration = librosa.get_duration(path=file_path)
+        offset = max(0, (total_duration - analyze_duration) / 2)
+    except Exception:
+        # Fallback: Just load the first 45 seconds if duration check fails
+        offset = 0.0
+
+    # Load only the specific segment
+    y, sr = librosa.load(file_path, sr=target_sr, mono=True, offset=offset, duration=analyze_duration)
+
+    return _analyze_signal(y, sr)
 
 
 def _validate_file(path: Path) -> Tuple[str, str]:

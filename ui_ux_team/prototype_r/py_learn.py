@@ -1008,8 +1008,8 @@ class MainUI(QWidget):
         if mood:
             print(f"Received mood update: {mood}")
             if mood in mood_mapper_display:
-                self.mood_tag.set_queue([mood_mapper_display[mood]])
                 self.mood_tag.hold_ms = 100_000
+                self.mood_tag.set_queue([mood_mapper_display[mood]])
 
             # 3. Play Music based on current Mood (Simple)
             # Check last mood to prevent skipping on every segment
