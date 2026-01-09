@@ -1474,7 +1474,7 @@ if __name__ == "__main__":
     window = MainUI()
 
     # makes it not steal focus
-    window.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
+    # window.setWindowFlag(Qt.WindowDoesNotAcceptFocus, True)
 
     window.show()
 
