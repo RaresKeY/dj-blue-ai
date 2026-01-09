@@ -13,6 +13,8 @@ import wave
 import time
 import math
 
+from the_listeners.device_helpers import pick_default_speaker
+
 if platform.system() == "Linux":
     from architects.helpers.record_live_mix_linux import LiveMixer, RATE, CHANNELS
 else:
@@ -21,6 +23,71 @@ else:
     CHANNELS = 2
 
 _USE_EXISTING_DURATION = object()
+
+
+class SpeakerRecorder:
+    """
+    Cross-platform speaker recorder that uses standard PyAudio.
+    On Windows, it tries to find a Loopback device (Stereo Mix, etc.)
+    """
+    def __init__(self, rate=44100, chunk=1024, channels=2, sampwidth=2):
+        self.rate = rate
+        self.chunk = chunk
+        self.channels = channels
+        self.sampwidth = sampwidth
+        
+        # Try to find a loopback device
+        pa = pyaudio.PyAudio()
+        info = pick_default_speaker(pa)
+        pa.terminate()
+        
+        device_index = info['index'] if info else None
+        
+        self.controller = RecordingController(
+            rate=rate, 
+            chunk=chunk, 
+            channels=channels, 
+            sampwidth=sampwidth
+        )
+        # Override the controller's device index if we found one
+        self._device_index = device_index
+        
+    @property
+    def chunks(self):
+        return self.controller.chunks
+
+    def start(self, duration=None):
+        # We need to re-open the stream with the correct device index if it was found
+        if self.controller.stream is None and self._device_index is not None:
+             self.controller.stream = self.controller.p.open(
+                format=pyaudio.paInt16,
+                channels=self.channels,
+                rate=self.rate,
+                input=True,
+                input_device_index=self._device_index,
+                stream_callback=self.controller._cb,
+                frames_per_buffer=self.chunk,
+            )
+             self.controller.paused = False
+             self.controller.stopped = False
+             self.controller.stream.start_stream()
+        else:
+            self.controller.start()
+
+    def pause(self):
+        self.controller.pause()
+
+    def resume(self):
+        self.controller.resume()
+
+    def stop(self):
+        self.controller.stop()
+
+    def get_pcm(self):
+        return self.controller.get_pcm()
+
+    def close(self):
+        self.controller.close()
 
 
 class PlaybackController:
