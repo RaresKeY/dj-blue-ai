@@ -6,6 +6,12 @@ from __future__ import annotations
 
 import ctypes
 import threading
+import platform
+
+if platform.system() == "Linux":
+    from architects.helpers import record_live_mix_linux as live_mix
+else:
+    live_mix = None
 
 _ERROR_HANDLER_FUNC = ctypes.CFUNCTYPE(
     None, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p
