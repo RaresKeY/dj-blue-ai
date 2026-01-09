@@ -6,12 +6,19 @@ import subprocess
 import threading
 import pyaudio
 import audioop
+import platform
 import select
 import struct
 import wave
 import time
 import math
-from architects.helpers.record_live_mix_linux import LiveMixer, RATE, CHANNELS
+
+if platform.system() == "Linux":
+    from architects.helpers.record_live_mix_linux import LiveMixer, RATE, CHANNELS
+else:
+    LiveMixer = None
+    RATE = 48000
+    CHANNELS = 2
 
 _USE_EXISTING_DURATION = object()
 
