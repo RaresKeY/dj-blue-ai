@@ -1,5 +1,7 @@
 import os
-import keyring
+import platform
+if platform.system() == "Linux":    
+    import keyring
 from dotenv import load_dotenv
 
 # --- CONFIGURATION ---
