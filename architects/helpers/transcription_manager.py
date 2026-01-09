@@ -48,7 +48,7 @@ class TranscriptionManager:
             return  # Already recording
 
         print('[TranscriptionManager] Starting recording...')
-        
+
         # Detect platform
         info = os_info()
         if info.get("system") == "Linux":
@@ -140,13 +140,13 @@ class TranscriptionManager:
         try:
             prompt = None
             if analysis_tags:
-                from architects.helpers.api_utils import CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE
-                prompt = f"{analysis_tags}\n\n{CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE}"
+                from architects.helpers.api_utils import CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE_SIMPLE
+                prompt = f"{analysis_tags}\n\n{CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE_SIMPLE}"
 
             result = self._llm_utils.transcribe_audio_bytes(
                 wav_bytes,
                 mime_type="audio/wav",
-                model_name="models/gemini-2.5-flash-lite",
+                model_name="models/gemini-3-flash-preview",
                 prompt=prompt,
                 structured=True,
             )
