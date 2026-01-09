@@ -1,14 +1,7 @@
-import threading
 import random
-import time
 import sys
 import os
-import wave
 import json
-from io import BytesIO
-
-from dotenv import load_dotenv
-from pathlib import Path
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
@@ -77,6 +70,9 @@ COLOR_BLUE_BIRD      = "#1565C0"   # was: "blue"
 
 BASE = os.path.dirname(__file__)
 IMAGE_NOT_FOUND = os.path.join(BASE, "assets/image_not_found_white.png")
+
+# Simple Transcript chunk len (in seconds)
+T_CHUNK = 30
 
 
 class ImageButton(QLabel):
@@ -904,6 +900,7 @@ class MainUI(QWidget):
 
         # Transcription Manager
         self.transcription_manager = None
+        self.transcript_line = 0
         
         # mood selection
         self.mood_map = None
@@ -913,7 +910,8 @@ class MainUI(QWidget):
         # childrens windows/menus
         # transcript window
         self._transcript_win = TranscriptWindow(parent=self)
-        self._transcript_win.closed.connect(lambda: setattr(self, "_transcript_win", None))
+        # Fix: Don't destroy the window reference on close, just update state
+        self._transcript_win.closed.connect(lambda: setattr(self, "_show_transcript_window", False))
         self._show_transcript_window = False
 
         # transcript segments
@@ -932,7 +930,7 @@ class MainUI(QWidget):
         if not api_key:
             print("Missing API Key, TranscriptionManager not initialized")
         else:
-            self.transcription_manager = TranscriptionManager(api_key)
+            self.transcription_manager = TranscriptionManager(api_key, chunk_seconds=T_CHUNK)
             self.transcription_manager.set_callback(self.transcript_ready.emit)
 
     def basic_music_play(self, music_path):
@@ -976,6 +974,8 @@ class MainUI(QWidget):
         if text:
             # We must ensure the window exists/is receiving updates
             self._transcript_win.add_transcript_segment(text)
+            self._save_translation_progressive(data)
+            self._save_transcript_progressive(data)
 
         mood_mapper_key = {
             "positive": "😊 positive", 
@@ -1010,26 +1010,86 @@ class MainUI(QWidget):
             if mood in mood_mapper_display:
                 self.mood_tag.hold_ms = 100_000
                 self.mood_tag.set_queue([mood_mapper_display[mood]])
+                self.float_mood(mood_mapper_display[mood])
 
             # 3. Play Music based on current Mood (Simple)
             # Check last mood to prevent skipping on every segment
             last_mood = getattr(self, "_last_mood", None)
-            
+
             if mood != last_mood:
                 self._last_mood = mood
                 music_path = None
-                
+
                 if mood in mood_mapper_key:
                     music_data = self.mood_map[mood_mapper_key[mood]]
                     if music_data:
                         music_path = random.choice(music_data)
-                
+
                 # If no specific mood music found, or mood not in key, fallback if nothing playing
                 if not music_path and (self._player is None or not self._player.is_playing()):
                      music_path = "ui_ux_team/prototype_r/deep_purple_smoke_on_the_water.wav"
 
                 if music_path:
                     self.basic_music_play(music_path)
+
+    def _save_transcript_progressive(self, data: dict):
+        """Temporary method to save transcript text progressively to a file."""
+        transcript_text = data.get("text")
+        if not transcript_text:
+            return
+        if not self.transcript_line:
+            self.transcript_line = 0
+
+        try:
+            # Create transcripts subfolder
+            save_dir = Path(__file__).parent / "transcripts"
+            save_dir.mkdir(exist_ok=True)
+
+            # Use session name for filename (sanitize if needed, but SESSION [...] is mostly okay for simple use)
+            filename = f"{self._current_session.replace(' ', '_').replace('[', '').replace(']', '')}.txt"
+            file_path = save_dir / filename
+
+            start_sec = self.transcript_line * T_CHUNK
+            end_sec = start_sec + T_CHUNK
+            time_chunk = f"{self.seconds_to_hms(start_sec)} - {self.seconds_to_hms(end_sec)}"
+            self.transcript_line += 1
+
+            with open(file_path, "a", encoding="utf-8") as f:
+                f.write(f"[{time_chunk}]\n{transcript_text}\n\n")
+
+        except Exception as e:
+            print(f"Failed to save progressive transcript: {e}")
+
+    def _save_translation_progressive(self, data: dict):
+        """Temporary method to save translated transcript text progressively to a file."""
+        translation_text = data.get("translation")
+        if not translation_text:
+            return
+
+        try:
+            # Create transcripts_translated subfolder
+            save_dir = Path(__file__).parent / "transcripts_translated"
+            save_dir.mkdir(exist_ok=True)
+
+            # Use session name for filename
+            filename = f"{self._current_session.replace(' ', '_').replace('[', '').replace(']', '')}_translated.txt"
+            file_path = save_dir / filename
+
+            start_sec = self.transcript_line * T_CHUNK
+            end_sec = start_sec + T_CHUNK
+            time_chunk = f"{self.seconds_to_hms(start_sec)} - {self.seconds_to_hms(end_sec)}"
+
+            with open(file_path, "a", encoding="utf-8") as f:
+                f.write(f"[{time_chunk}]\n{translation_text}\n\n")
+
+        except Exception as e:
+            print(f"Failed to save progressive translation: {e}")
+
+    @staticmethod
+    def seconds_to_hms(seconds):
+        m, s = divmod(seconds, 60)
+        h, m = divmod(m, 60)
+        return f"{h:02d}:{m:02d}:{s:02d}"
 
     @staticmethod
     def load_api_key():
@@ -1132,6 +1192,9 @@ class MainUI(QWidget):
         ]
 
         FloatingToast(self).show_message(random.choice(mood_items))
+
+    def float_mood(self, mood: str):
+        FloatingToast(self).show_message(mood)
 
     def build_sidebar(self):
         # depth 1

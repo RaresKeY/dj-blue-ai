@@ -17,7 +17,8 @@ Requirements:
 2. If the recording is in a language different than English, also provide the English translation.
 3. Identify the primary emotion of the speaker in this recording. You MUST choose exactly one of the following: {MEET_TYPE_MOODS}.
 4. Provide a brief summary of the entire audio at the beginning.
-5. Do no hallucinate speech if the audio is silent.
+5. Silence/Noise: If no speech is detected, set "content" to "" (empty string). Do not hallucinate text.
+6. Do not use timestamps in content.
 
 Respond ONLY as JSON matching:
 {{
@@ -26,6 +27,27 @@ Respond ONLY as JSON matching:
   "translation": "string|None",
   "language_code": "string",
   "emotion": "{MEET_TYPE_MOODS}"
+}}
+""".strip()
+
+CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE_SIMPLE = f"""
+Analyze the audio and output ONLY valid JSON.
+
+Allowed Emotions: {MEET_TYPE_MOODS}
+
+Instructions:
+1. content: Transcribe exactly. If silent/noise only, return "". No timestamps.
+2. language_code: Use 2-letter ISO code (e.g., "en", "es").
+3. translation: English translation. If audio is English, return null.
+4. emotion: Select exactly one from 'Allowed Emotions'.
+
+Required JSON Format:
+{{
+  "summary": "Brief summary",
+  "content": "Full transcription",
+  "translation": "Translation or null",
+  "language_code": "en",
+  "emotion": "Chosen Emotion"
 }}
 """.strip()
 
@@ -323,7 +345,7 @@ class LLMUtilitySuite:
         if not mime_type:
             return {"error": "mime_type is required for raw audio bytes."}
 
-        prompt = prompt or CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE
+        prompt = prompt or CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE_SIMPLE
         audio_part, source = self._prepare_audio_part(
             bytes(audio_bytes),
             mime_type=mime_type,

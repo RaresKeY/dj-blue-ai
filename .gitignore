@@ -29,6 +29,8 @@ dist-ssr
 # Managed Mem
 managed_mem.json
 managed_mem copy.json
+ui_ux_team/prototype_r/transcripts
+ui_ux_team/prototype_r/transcripts_translated
 
 # Misc / Extra
 ui_ux_team/prototype_r/assets_d
@@ -51,6 +53,7 @@ setup_keys.py
 
 # Large music collection for testing ONLY
 mood_music_collection
+mood_music_collection.zip
 
 # Music d experiments temp
 music_librarians/query_sites
