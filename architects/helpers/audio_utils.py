@@ -450,20 +450,29 @@ class AudioController:
 
         self.mic = RecordingController(rate=rate, chunk=mic_chunk, channels=mic_channels)
         
-        if monitors and len(monitors) > 0:
-            self.speaker = MultiPlaybackRecorder(
-                monitors=monitors,
+        if platform.system() == "Linux":
+            if monitors and len(monitors) > 0:
+                self.speaker = MultiPlaybackRecorder(
+                    monitors=monitors,
+                    rate=rate,
+                    channels=speaker_channels,
+                    sampwidth=2
+                )
+            else:
+                self.speaker = PlaybackRecorderLinux(
+                    duration=None,  # keep open until stopped
+                    rate=rate,
+                    channels=speaker_channels,
+                    sampwidth=2,
+                    monitor=monitor,
+                )
+        else:
+            # Use cross-platform fallback (e.g. Windows Stereo Mix)
+            self.speaker = SpeakerRecorder(
                 rate=rate,
+                chunk=mic_chunk, # Match chunk size with mic for sync
                 channels=speaker_channels,
                 sampwidth=2
-            )
-        else:
-            self.speaker = PlaybackRecorderLinux(
-                duration=None,  # keep open until stopped
-                rate=rate,
-                channels=speaker_channels,
-                sampwidth=2,
-                monitor=monitor,
             )
 
         self._chunks: List[Tuple[bytes, bytes]] = []
