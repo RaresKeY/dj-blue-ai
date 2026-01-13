@@ -2,15 +2,18 @@ import random
 import sys
 import os
 import json
+import markdown
+import threading
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QFrame, QLabel, QListWidget,
-    QStackedWidget, QListWidgetItem, QPushButton
+    QStackedWidget, QListWidgetItem, QPushButton, QFileDialog
 )
 from PySide6.QtGui import (
     QPalette, QColor, QPixmap, QCursor, QTransform, 
-    QPainter, QFont, QPainterPath, QRegion, QCursor
+    QPainter, QFont, QPainterPath, QRegion, QCursor,
+    QTextDocument
 )
 from PySide6.QtWidgets import (
     QGraphicsColorizeEffect, QGraphicsOpacityEffect, QSizePolicy, QSpacerItem, 
@@ -18,7 +21,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import (
     Qt, Signal, QPropertyAnimation, QEasingCurve, 
-    Property, QRect, QSize, QPoint, QTimer, QEvent, QParallelAnimationGroup
+    Property, QRect, QSize, QPoint, QTimer, QEvent, QParallelAnimationGroup,
+    QThread, Slot
 )
 
 from pathlib import Path
@@ -31,6 +35,7 @@ from architects.helpers.miniaudio_player import MiniaudioPlayer
 from architects.helpers.transcription_manager import TranscriptionManager
 from architects.helpers.tabs_audio import get_display_names
 from architects.helpers.managed_mem import ManagedMem
+from architects.helpers.gemini_chatbot import GeminiChatbot
 
 # ---- Dark Theme Color Constants ----
 COLOR_BG_MAIN        = "#1E1E1E"   # was: "orange"
@@ -589,30 +594,83 @@ class SettingsPopup(QWidget):
         self.show()
 
 
-class TextBoxAI(QPlainTextEdit):
+class TextBoxAI(QTextBrowser):
     def __init__(self):
         super().__init__()
 
         self.setObjectName("TextBox") 
-        self.setReadOnly(True)
+        # self.setReadOnly(True) # QTextBrowser is read-only by default
+        self.setOpenExternalLinks(True)
 
         # padding + border
         self.setStyleSheet("""
-            QPlainTextEdit#TextBox {
+            QTextBrowser#TextBox {
                 background-color: #0F0F0F;
                 color: #B8B8B8;
 
                 border: 1px solid #2A2D31;
                 border-radius: 10px;
-                padding: 10px;
+                padding: 15px;
 
                 font-size: 15px;
-                font-weight: 600;
+                font-weight: 400;
                 font-family: "Inter", "Segoe UI", "Ubuntu", sans-serif;
+                line-height: 1.4;
 
                 selection-background-color: #3E6AFF;
             }
+            /* Style lists */
+            QTextBrowser ul, QTextBrowser ol {
+                margin-left: 20px;
+                padding-left: 0px;
+            }
+            /* Style code blocks */
+            QTextBrowser pre {
+                background-color: #1E1E1E;
+                padding: 10px;
+                border-radius: 5px;
+                font-family: "Consolas", "Monaco", monospace;
+            }
+            QTextBrowser code {
+                background-color: #1E1E1E;
+                font-family: "Consolas", "Monaco", monospace;
+            }
         """)
+
+    def append_message(self, role: str, text: str):
+        """Formats and appends a message with markdown support and role-based styling."""
+        
+        # Pre-process text to ensure lists have a newline before them (AI often skips this)
+        processed_text = text.replace("\n*", "\n\n*").replace("\n-", "\n\n-")
+        
+        # Use 'extra' for tables/code-blocks and 'sane_lists' for better list handling
+        html_content = markdown.markdown(processed_text, extensions=['extra', 'sane_lists'])
+        
+        if role == "user":
+            sender = "You"
+            color = "#5EA2FF"  # Soft Blue
+        elif role == "model":
+            sender = "BlueBird"
+            color = "#2ECC71"  # Soft Green
+        else:
+            sender = "System"
+            color = "#95A5A6"  # Gray
+
+        # Construct HTML block
+        # Note: QT's HTML subset is limited. Simple inline styles work best.
+        html_block = f"""
+        <div style="margin-top: 10px; margin-bottom: 5px;">
+            <span style="color: {color}; font-weight: bold; font-size: 16px;">{sender}</span>
+        </div>
+        <div style="color: #E0E0E0; margin-bottom: 10px;">
+            {html_content}
+        </div>
+        <hr style="background-color: #2A2D31; height: 1px; border: none; margin: 10px 0;">
+        """
+        
+        self.append("") # Ensure separation from previous block
+        self.insertHtml(html_block)
+        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
 
 
 class FloatingMenu(QWidget):
@@ -758,10 +816,12 @@ class InputBlueBird(QTextEdit):
         self.text_box: TextBoxAI = text_box
 
     def keyPressEvent(self, e):
-        if e.key() == Qt.Key_Return and not e.modifiers():
+        # Send on Ctrl+Space
+        if e.key() == Qt.Key_Space and (e.modifiers() & Qt.ControlModifier):
             self.send_message()
             return
-        return super().keyPressEvent(e)
+        # Allow default behavior (newline on Enter)
+        super().keyPressEvent(e)
 
     def send_message(self):
         text = self.toPlainText().strip()
@@ -779,7 +839,7 @@ class InputBlueBird(QTextEdit):
         self.setFont(font)
 
         self.setFixedHeight(70)
-        self.setPlaceholderText("Type a message to BlueBird AI")
+        self.setPlaceholderText("Type a message to BlueBird AI (Ctrl+Space to send)")
 
         # padding + border
         self.setStyleSheet("""
@@ -833,24 +893,221 @@ class SearchBar(QTextEdit):
         """)
 
 
+class LoadingCircle(QWidget):
+    """Simple animated loading spinner."""
+    def __init__(self, parent=None, size=50):
+        super().__init__(parent)
+        self.setFixedSize(size, size)
+        self._angle = 0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._update_angle)
+        self.hide()
+
+    def _update_angle(self):
+        self._angle = (self._angle + 30) % 360
+        self.update()
+
+    def start(self):
+        self._timer.start(80)
+        self.show()
+        self.raise_()
+
+    def stop(self):
+        self._timer.stop()
+        self.hide()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        cx, cy = self.width() / 2, self.height() / 2
+        radius = min(cx, cy) - 6
+        
+        painter.translate(cx, cy)
+        painter.rotate(self._angle)
+        
+        pen = painter.pen()
+        pen.setWidth(5)
+        pen.setCapStyle(Qt.RoundCap)
+        
+        # Draw 8 lines with progressive opacity
+        for i in range(8):
+            opacity = int(255 * (i + 1) / 8)
+            pen.setColor(QColor(62, 106, 255, opacity)) # Soft blue
+            painter.setPen(pen)
+            painter.drawLine(0, int(-radius), 0, int(-radius + 10))
+            painter.rotate(45)
+
+
+class ChatWorker(QThread):
+    response_received = Signal(dict)
+
+    def __init__(self, chatbot, message):
+        super().__init__()
+        self.chatbot = chatbot
+        self.message = message
+
+    def run(self):
+        if self.chatbot:
+            response = self.chatbot.send_message(self.message)
+            self.response_received.emit(response)
+        else:
+             self.response_received.emit({"error": "Chatbot not initialized"})
+
+
+class ChatInitWorker(QThread):
+    init_finished = Signal(bool, str)
+
+    def __init__(self, chatbot, transcript):
+        super().__init__()
+        self.chatbot = chatbot
+        self.transcript = transcript
+
+    def run(self):
+        try:
+            success = self.chatbot.load_context(self.transcript)
+            if success:
+                self.init_finished.emit(True, "Context loaded.")
+            else:
+                self.init_finished.emit(False, "Failed to load context.")
+        except Exception as e:
+            self.init_finished.emit(False, str(e))
+
+
+class ContextUpdateWorker(QThread):
+    update_finished = Signal(bool, str)
+
+    def __init__(self, chatbot, file_path):
+        super().__init__()
+        self.chatbot = chatbot
+        self.file_path = file_path
+
+    def run(self):
+        try:
+            success = self.chatbot.update_context_with_file(self.file_path)
+            if success:
+                self.update_finished.emit(True, "Context loaded.")
+            else:
+                self.update_finished.emit(False, "Failed to load context.")
+        except Exception as e:
+            self.update_finished.emit(False, str(e))
+
+
 class BlueBirdChat(QWidget):
     closed = Signal()
 
-    def __init__(self):
+    def __init__(self, api_key=None, initial_transcript=None):
         super().__init__()
         self.setWindowTitle("BlueBird AI")
-
+        self.api_key = api_key
+        self.chatbot = None
+        self.initial_transcript = initial_transcript
+        
         self.text_box = None
+        self.input_field = None
+        self.send_btn = None
+        self.loader = None
         self.root_layout = self.build_layout()
+
+        if self.api_key:
+             self.chatbot = GeminiChatbot(self.api_key)
+             
+             transcript_to_load = self.initial_transcript if self.initial_transcript else "System: This is the start of the session."
+             
+             self.text_box.append_message("system", "*Initializing BlueBird AI context...*")
+             self.set_input_enabled(False)
+             if self.loader:
+                 self.loader.start()
+
+             self.init_worker = ChatInitWorker(self.chatbot, transcript_to_load)
+             self.init_worker.init_finished.connect(self.on_init_finished)
+             self.init_worker.start()
+        else:
+             self.text_box.append_message("system", "**System:** API Key missing.")
 
     def closeEvent(self, event):
         self.closed.emit()
         return super().closeEvent(event)
 
+    def set_input_enabled(self, enabled):
+        if self.input_field:
+            self.input_field.setReadOnly(not enabled)
+        if self.send_btn:
+            self.send_btn.setEnabled(enabled)
+
+    def on_init_finished(self, success, message):
+        if self.loader:
+            self.loader.stop()
+
+        if success:
+            self.text_box.append_message("system", "*BlueBird AI Ready.*")
+        else:
+            self.text_box.append_message("system", f"**Error initializing:** {message}")
+        
+        # Always enable input so the UI is not locked
+        self.set_input_enabled(True)
+
+    def on_context_updated(self, success, message):
+        if self.loader:
+            self.loader.stop()
+
+        if success:
+            self.text_box.append_message("system", "*Context updated successfully.*")
+        else:
+            self.text_box.append_message("system", f"**Error updating context:** {message}")
+
     def handle_message(self, text: str):
         """Receive text from input widget and append to the chat box."""
-        print("SENT:", text)
-        self.text_box.appendPlainText(text)
+        # Display user message
+        self.text_box.append_message("user", text)
+        
+        # Send to AI
+        if self.chatbot:
+             if self.loader:
+                 self.loader.start()
+             self.worker = ChatWorker(self.chatbot, text)
+             self.worker.response_received.connect(self.handle_ai_response)
+             self.worker.start()
+        else:
+             self.text_box.append_message("system", "**System:** API Key missing or Chatbot not initialized.")
+
+    def handle_ai_response(self, response):
+        if self.loader:
+            self.loader.stop()
+
+        if "error" in response:
+             self.text_box.append_message("system", f"**Error:** {response['error']}")
+        else:
+             self.text_box.append_message("model", response['text'])
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'load_transcript') and self.load_transcript:
+            # Position at top right with 10px margin
+            self.load_transcript.move(self.width() - self.load_transcript.width() - 22, 22)
+            self.load_transcript.raise_()
+        
+        if hasattr(self, 'loader') and self.loader:
+            # Center in text box area
+            tb_geom = self.text_box.geometry()
+            lx = tb_geom.x() + (tb_geom.width() - self.loader.width()) // 2
+            ly = tb_geom.y() + (tb_geom.height() - self.loader.height()) // 2
+            self.loader.move(lx, ly)
+            self.loader.raise_()
+
+    def open_file_picker(self):
+        file_name, _ = QFileDialog.getOpenFileName(self, "Open Transcript", "", "Text Files (*.txt);;All Files (*)")
+        if file_name:
+            if self.chatbot:
+                self.text_box.append_message("system", f"*Loading context from: {os.path.basename(file_name)}...*")
+                if self.loader:
+                    self.loader.start()
+                
+                self.reinit_worker = ContextUpdateWorker(self.chatbot, file_name)
+                self.reinit_worker.update_finished.connect(self.on_context_updated)
+                self.reinit_worker.start()
+            else:
+                 self.text_box.append_message("system", "**System:** Chatbot not initialized.")
 
     def build_layout(self):
         layout = QVBoxLayout(self)
@@ -859,17 +1116,25 @@ class BlueBirdChat(QWidget):
 
         user_input_layout = QHBoxLayout()
 
-        user_input = InputBlueBird(self.text_box)
-        user_input.message_sent.connect(self.handle_message)
+        self.input_field = InputBlueBird(self.text_box)
+        self.input_field.message_sent.connect(self.handle_message)
 
-        send_button = MainUI.button("assets/send_black.png", size=(63, 63))
-        send_button.clicked.connect(user_input.send_message)
+        self.send_btn = MainUI.button("assets/send_black.png", size=(63, 63))
+        self.send_btn.clicked.connect(self.input_field.send_message)
 
-        user_input_layout.addWidget(user_input)
-        user_input_layout.addWidget(send_button)
+        user_input_layout.addWidget(self.input_field)
+        user_input_layout.addWidget(self.send_btn)
 
         layout.addWidget(self.text_box, 9)
         layout.addLayout(user_input_layout, 1)
+
+        # Floating button
+        self.load_transcript = MainUI.button("assets/load_transcript.png", size=(40, 40))
+        self.load_transcript.clicked.connect(self.open_file_picker)
+        self.load_transcript.setParent(self)
+
+        # Loading Spinner (Floating)
+        self.loader = LoadingCircle(self)
 
 
 class MainUI(QWidget):
@@ -1327,7 +1592,11 @@ class MainUI(QWidget):
     
     def open_bluebird_chat(self):
         if self._bluebird_chat is None:
-            self._bluebird_chat = BlueBirdChat()
+            # Get current transcript text
+            transcript_text = self._transcript_win.text_box.toPlainText()
+            api_key = self.load_api_key()
+
+            self._bluebird_chat = BlueBirdChat(api_key=api_key, initial_transcript=transcript_text)
 
             self._bluebird_chat.closed.connect(
                 lambda: setattr(self, "_bluebird_chat", None))
