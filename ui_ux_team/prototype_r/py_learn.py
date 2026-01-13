@@ -969,7 +969,7 @@ class ChatInitWorker(QThread):
             if success:
                 self.init_finished.emit(True, "Context loaded.")
             else:
-                self.init_finished.emit(False, "Failed to load context.")
+                self.init_finished.emit(False, "Failed to load context. (Make sure you started recording and have 1K+ context or you loaded context from file)")
         except Exception as e:
             self.init_finished.emit(False, str(e))
 
