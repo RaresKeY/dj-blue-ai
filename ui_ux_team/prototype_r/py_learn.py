@@ -816,8 +816,8 @@ class InputBlueBird(QTextEdit):
         self.text_box: TextBoxAI = text_box
 
     def keyPressEvent(self, e):
-        # Send on Ctrl+Space
-        if e.key() == Qt.Key_Space and (e.modifiers() & Qt.ControlModifier):
+        # Send on Ctrl+Enter
+        if (e.key() == Qt.Key_Return or e.key() == Qt.Key_Enter) and (e.modifiers() & Qt.ControlModifier):
             self.send_message()
             return
         # Allow default behavior (newline on Enter)
