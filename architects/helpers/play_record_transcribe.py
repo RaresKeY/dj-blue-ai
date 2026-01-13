@@ -66,7 +66,7 @@ def main():
     transcription = llm.transcribe_audio_bytes(
         wav_bytes,
         mime_type="audio/wav",
-        model_name="models/gemini-2.5-flash",
+        model_name="models/gemini-2.5-flash-lite",
     )
 
     print(f"Transcription text:\n{transcription.get('text')}")

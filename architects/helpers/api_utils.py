@@ -40,6 +40,7 @@ Instructions:
 2. language_code: Use 2-letter ISO code (e.g., "en", "es").
 3. translation: English translation. If audio is English, return null.
 4. emotion: Select exactly one from 'Allowed Emotions'.
+5. do not add timestamps in response.
 
 Required JSON Format:
 {{
