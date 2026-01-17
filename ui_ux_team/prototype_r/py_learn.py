@@ -8,7 +8,7 @@ import threading
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QGridLayout, QFrame, QLabel, QListWidget,
-    QStackedWidget, QListWidgetItem, QPushButton, QFileDialog
+    QStackedWidget, QListWidgetItem, QPushButton, QFileDialog, QSlider
 )
 from PySide6.QtGui import (
     QPalette, QColor, QPixmap, QCursor, QTransform, 
@@ -1137,6 +1137,88 @@ class BlueBirdChat(QWidget):
         self.loader = LoadingCircle(self)
 
 
+class VolumeButton(ImageButton):
+    interaction_start = Signal()
+    interaction_move = Signal(QPoint)
+    interaction_end = Signal()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.interaction_start.emit()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        # We want to track movement even if it didn't start as a "hover"
+        if event.buttons() & Qt.LeftButton:
+            self.interaction_move.emit(event.globalPosition().toPoint())
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.interaction_end.emit()
+        super().mouseReleaseEvent(event)
+
+
+class VolumePopup(QWidget):
+    volume_changed = Signal(float)
+    closed = Signal()
+
+    def __init__(self, parent=None, current_volume=1.0):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.resize(60, 200)
+
+        self.slider = QSlider(Qt.Vertical, self)
+        self.slider.setRange(0, 100)
+        self.slider.setValue(int(current_volume * 100))
+        self.slider.valueChanged.connect(self._on_value_changed)
+
+        self.slider.setStyleSheet("""
+            QSlider::groove:vertical {
+                background: #2A2A2A;
+                width: 8px;
+                border-radius: 4px;
+                margin: 0px 10px;
+            }
+            QSlider::handle:vertical {
+                background: #6A1B9A;
+                height: 18px;
+                margin: 0 -5px;
+                border-radius: 9px;
+            }
+            QSlider::add-page:vertical {
+                background: #6A1B9A;
+                border-radius: 4px;
+                margin: 0px 10px;
+            }
+            QSlider::sub-page:vertical {
+                background: #2A2A2A;
+                border-radius: 4px;
+                margin: 0px 10px;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 20, 10, 20)
+        layout.addWidget(self.slider)
+
+        self.setStyleSheet("""
+            VolumePopup {
+                background-color: #1E1E1E;
+                border: 1px solid #3A3A3A;
+                border-radius: 10px;
+            }
+        """)
+
+    def _on_value_changed(self, value):
+        self.volume_changed.emit(value / 100.0)
+
+    def closeEvent(self, event):
+        self.closed.emit()
+        super().closeEvent(event)
+
+
 class MainUI(QWidget):
     transcript_ready = Signal(dict)
 
@@ -1162,6 +1244,7 @@ class MainUI(QWidget):
         self._player = None
         self._paused = False
         self._currently_playing = "deep_purple_smoke_on_the_water.wav"
+        self._current_volume = 0.8  # Default volume 80%
 
         # Transcription Manager
         self.transcription_manager = None
@@ -1189,6 +1272,7 @@ class MainUI(QWidget):
         self._bluebird_chat = None
         self._settings_menu = None
         self._meet_type = None
+        self._volume_popup = None
 
         # API Utils / Transcription
         api_key = self.load_api_key()
@@ -1225,6 +1309,7 @@ class MainUI(QWidget):
         self._currently_playing = music_path
         self._play_btn.set_image("assets/pause.png")
         self._player = MiniaudioPlayer(str(real_path))
+        self._player.set_volume(self._current_volume)  # Apply current volume
         self._player.start()
 
         print(f"Playing Music: {self._currently_playing}")
@@ -1311,7 +1396,7 @@ class MainUI(QWidget):
             save_dir.mkdir(exist_ok=True)
 
             # Use session name for filename (sanitize if needed, but SESSION [...] is mostly okay for simple use)
-            filename = f"{self._current_session.replace(' ', '_').replace('[', '').replace(']', '')}.txt"
+            filename = f"{self._current_session.replace(' ', '_').replace('[', '').replace(']', '').replace(':', '-').replace('+', '')}.txt"
             file_path = save_dir / filename
 
             start_sec = self.transcript_line * T_CHUNK
@@ -1337,7 +1422,7 @@ class MainUI(QWidget):
             save_dir.mkdir(exist_ok=True)
 
             # Use session name for filename
-            filename = f"{self._current_session.replace(' ', '_').replace('[', '').replace(']', '')}_translated.txt"
+            filename = f"{self._current_session.replace(' ', '_').replace('[', '').replace(']', '').replace(':', '-').replace('+', '')}_translated.txt"
             file_path = save_dir / filename
 
             start_sec = self.transcript_line * T_CHUNK
@@ -1553,6 +1638,7 @@ class MainUI(QWidget):
             self._play_btn.set_image("assets/pause.png")
             audio_path = Path(__file__).with_name(file_path)
             self._player = MiniaudioPlayer(str(audio_path))
+            self._player.set_volume(self._current_volume)  # Apply current volume
             self._player.start()
 
             print("Playing Music...")
@@ -1623,19 +1709,99 @@ class MainUI(QWidget):
 
         return blue_bird, right_spacer
 
+    def on_volume_start(self):
+        button = self.sender()
+        if not button:
+            return
+
+        current_vol = 1.0
+        if self._player:
+            current_vol = self._player._volume
+
+        if not self._volume_popup:
+            # Parent to button for easier lifecycle management and relative positioning
+            self._volume_popup = VolumePopup(parent=button, current_volume=current_vol)
+            self._volume_popup.volume_changed.connect(self.set_volume)
+            self._volume_popup.closed.connect(lambda: setattr(self, "_volume_popup", None))
+        
+        # Auto position logic: Center above the button
+        self._volume_popup.show()
+        
+        popup_w = self._volume_popup.width()
+        popup_h = self._volume_popup.height()
+        
+        # Offset calculation (relative to button's top-left)
+        local_offset = QPoint((button.width() - popup_w) // 2 + button.width() // 2, -popup_h - 10)
+        
+        # Move the popup window to the global position corresponding to the local offset
+        self._volume_popup.move(button.mapToGlobal(local_offset))
+
+    def on_volume_move(self, global_pos):
+        if self._volume_popup and self._volume_popup.isVisible():
+            slider = self._volume_popup.slider
+            # Map global mouse pos to slider's coordinate system
+            local_pos = slider.mapFromGlobal(global_pos)
+            
+            # Vertical slider: 0 is top, height is bottom visually in widget coords
+            # But we want 100% volume at top, 0% at bottom.
+            h = slider.height()
+            y = local_pos.y()
+            
+            # Clamp y
+            y = max(0, min(h, y))
+            
+            # Calculate value ratio (top=1.0, bottom=0.0)
+            if h > 0:
+                ratio = 1.0 - (y / h)
+            else:
+                ratio = 0.0
+            
+            val = int(ratio * slider.maximum())
+            slider.setValue(val)
+
+    def on_volume_end(self):
+        if self._volume_popup:
+            self._volume_popup.close()
+            self._volume_popup = None
+
+    def set_volume(self, volume):
+        if self._player:
+            self._player.set_volume(volume)
+        else:
+            # TODO: Store volume for when player starts
+            pass
+
     def build_main_bottom_panel(self):
         # depth 2
         bottom_con = self.color_box(COLOR_BOTTOM_BG)
         bottom_con_layout = QHBoxLayout()
         bottom_con.setLayout(bottom_con_layout)
 
-        blue_bird, right_spacer = self.build_blue_bird()
+        blue_bird, _ = self.build_blue_bird()
+        
+        # Volume Control Button
+        volume_control = VolumeButton(
+            path=MainUI.build_path("assets/volume_button.png"), 
+            size=(30, 30), 
+            fallback=IMAGE_NOT_FOUND
+        )
+        volume_control.interaction_start.connect(self.on_volume_start)
+        volume_control.interaction_move.connect(self.on_volume_move)
+        volume_control.interaction_end.connect(self.on_volume_end)
+
+        right_spacer = QWidget()
+        right_spacer.setFixedSize(70, 70)
+        right_spacer_layout = QHBoxLayout(right_spacer)
+        # right_spacer_layout.setContentsMargins(40, 40, 40, 40)
+
+        right_spacer_layout.addWidget(volume_control, alignment=Qt.AlignTop | Qt.AlignRight)
 
         controls = self.build_main_controls()
 
         bottom_con_layout.addWidget(blue_bird, alignment=Qt.AlignBottom)
         bottom_con_layout.addWidget(controls, alignment=Qt.AlignHCenter | Qt.AlignTop)
-        bottom_con_layout.addWidget(right_spacer)
+        bottom_con_layout.addWidget(right_spacer, alignment=Qt.AlignTop)
+
 
         return bottom_con
 

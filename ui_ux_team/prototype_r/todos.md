@@ -14,7 +14,7 @@
 [ ] Make proper music controller, selects music at the end of play based on mood (miniaudio lib)
 [ ] Embed more complex mood to mapping? possible, allows precise music selection, not just random
 
-[ ] Volume level slide
+[x] Volume level slide
 [ ] Lower music volume if it contained speech (can be pre-computed)
 [ ] Compute sequence of volume amplification for each song for meet type
 
