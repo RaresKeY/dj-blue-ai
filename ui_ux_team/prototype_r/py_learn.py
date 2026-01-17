@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QStackedWidget, QListWidgetItem, QPushButton, QFileDialog, QSlider
 )
 from PySide6.QtGui import (
-    QPalette, QColor, QPixmap, QCursor, QTransform, 
+    QPalette, QColor, QPixmap, QCursor, QTransform,
     QPainter, QFont, QPainterPath, QRegion, QCursor,
     QTextDocument
 )
@@ -1778,11 +1778,11 @@ class MainUI(QWidget):
         bottom_con.setLayout(bottom_con_layout)
 
         blue_bird, _ = self.build_blue_bird()
-        
+
         # Volume Control Button
         volume_control = VolumeButton(
             path=MainUI.build_path("assets/volume_button.png"), 
-            size=(30, 30), 
+            size=(42, 42), 
             fallback=IMAGE_NOT_FOUND
         )
         volume_control.interaction_start.connect(self.on_volume_start)
@@ -1792,7 +1792,7 @@ class MainUI(QWidget):
         right_spacer = QWidget()
         right_spacer.setFixedSize(70, 70)
         right_spacer_layout = QHBoxLayout(right_spacer)
-        # right_spacer_layout.setContentsMargins(40, 40, 40, 40)
+        right_spacer_layout.setContentsMargins(5, 5, 5, 5)
 
         right_spacer_layout.addWidget(volume_control, alignment=Qt.AlignTop | Qt.AlignRight)
 
