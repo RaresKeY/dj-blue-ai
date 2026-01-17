@@ -9,6 +9,9 @@
 - `FloatingToast` (`ui_ux_team/prototype_r/py_learn.py:324-419`): Animated toast that rises and fades. Call `show_message(text, duration_ms=2200, bottom_band_ratio=0.3)`.
 - `PopupTitleBar` + `SettingsPopup` (`ui_ux_team/prototype_r/py_learn.py:421-477`): Frameless popup scaffold with category list and stacked content; populate with dict of tab widgets.
 - `FloatingMenu` (`ui_ux_team/prototype_r/py_learn.py:606-656`): Simple popup menu anchored to a parent position; emits `closed`.
+- `VolumePopup` & `VolumeButton` (`ui_ux_team/prototype_r/py_learn.py`):
+    - `VolumeButton`: Extends `ImageButton` to support drag interaction signals (`interaction_start`, `interaction_move`, `interaction_end`).
+    - `VolumePopup`: A frameless slider window designed to be positioned relative to the button. Supports vertical sliding volume control (0.0 - 1.0).
 - Styled text boxes: `TextBoxAI` (`ui_ux_team/prototype_r/py_learn.py:544-573`), `TextBox` (`ui_ux_team/prototype_r/py_learn.py:680-722`), `SearchBar` (`ui_ux_team/prototype_r/py_learn.py:806-838`).
 
 ## Usage Tips
