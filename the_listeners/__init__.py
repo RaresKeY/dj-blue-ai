@@ -2,7 +2,7 @@
 DJ listeners package exports.
 """
 
-from .audio_utils import suppress_alsa_warnings
+from .alsa_suppres import suppress_alsa_warnings
 from .device_helpers import (
     pick_default_mic,
     pick_default_speaker,

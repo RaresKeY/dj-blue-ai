@@ -18,7 +18,7 @@ import wave
 # --- DEPENDENȚE GUI ---
 from PySide6.QtCore import QThread, Signal as pyqtSignal
 
-from .audio_utils import suppress_alsa_warnings
+from .alsa_suppres import suppress_alsa_warnings
 from .device_helpers import resolve_device_params
 
 suppress_alsa_warnings()

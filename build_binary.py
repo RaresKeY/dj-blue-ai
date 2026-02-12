@@ -67,11 +67,8 @@ def build():
     PyInstaller.__main__.run(args)
     print("Build complete.")
 
-    # Post-build actions: Copy .env if it exists (for API key)
-    # The user required "music library should at this point be placed in same folder next to binary"
-    # BUT explicitly asked "do not copy music into binary or anywhere else" in the latest turn.
-    
-    # Also copy .env if it exists (for API key)
+    # Post-build actions: 
+    # Copy .env if it exists (for API key)
     env_file = base_dir / ".env"
     if env_file.exists():
         shutil.copy(env_file, dist_dir / ".env")
