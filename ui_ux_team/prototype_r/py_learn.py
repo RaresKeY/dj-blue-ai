@@ -33,6 +33,12 @@ if not getattr(sys, 'frozen', False):
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
 
+def get_project_root() -> Path:
+    """Returns the project root directory."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys.executable).parent
+    return Path(__file__).resolve().parents[2]
+
 from architects.helpers.miniaudio_player import MiniaudioPlayer
 from architects.helpers.transcription_manager import TranscriptionManager
 from architects.helpers.tabs_audio import get_display_names
@@ -1242,6 +1248,10 @@ class MainUI(QWidget):
 
         # managed mem
         self.man_mem = ManagedMem()
+
+        # Ensure music folder exists next to the application
+        music_folder = get_project_root() / "mood_music_collection"
+        music_folder.mkdir(parents=True, exist_ok=True)
 
         # music player
         self._player = None
