@@ -34,3 +34,6 @@ ui_ux_team/prototype_r/transcripts_translated
 # Large music collection for testing ONLY
 mood_music_collection
 mood_music_collection.zip
+
+# Binary
+build/

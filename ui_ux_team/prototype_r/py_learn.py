@@ -26,16 +26,19 @@ from PySide6.QtCore import (
 )
 
 from pathlib import Path
+
 # Ensure project root is importable when running the script directly.
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+if not getattr(sys, 'frozen', False):
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
 
 from architects.helpers.miniaudio_player import MiniaudioPlayer
 from architects.helpers.transcription_manager import TranscriptionManager
 from architects.helpers.tabs_audio import get_display_names
 from architects.helpers.managed_mem import ManagedMem
 from architects.helpers.gemini_chatbot import GeminiChatbot
+from architects.helpers.resource_path import resource_path
 
 # ---- Dark Theme Color Constants ----
 COLOR_BG_MAIN        = "#1E1E1E"   # was: "orange"
@@ -73,7 +76,7 @@ COLOR_BLUE_BIRD      = "#1565C0"   # was: "blue"
 
 # COLOR_BLUE_BIRD      = "blue"     # original
 
-BASE = os.path.dirname(__file__)
+BASE = resource_path("ui_ux_team/prototype_r")
 IMAGE_NOT_FOUND = os.path.join(BASE, "assets/image_not_found_white.png")
 
 # Simple Transcript chunk len (in seconds)
@@ -1252,7 +1255,8 @@ class MainUI(QWidget):
         
         # mood selection
         self.mood_map = None
-        with open("mood_readers/data/mood_playlists_organized.json", 'r', encoding='utf-8') as f:
+        mood_data_path = resource_path("mood_readers/data/mood_playlists_organized.json")
+        with open(mood_data_path, 'r', encoding='utf-8') as f:
             self.mood_map = json.load(f)
 
         # childrens windows/menus
@@ -1288,12 +1292,11 @@ class MainUI(QWidget):
         if clean_path.startswith("./"):
              clean_path = clean_path[2:]
         
-        # Try resolving against PROJECT_ROOT
-        real_path = PROJECT_ROOT / clean_path
-        
-        # Fallback for legacy relative paths (if any) or simple filenames
+        # Try resolving using resource_path (handles frozen and dev)
+        real_path = Path(resource_path(clean_path))
         if not real_path.exists():
-             real_path = Path(__file__).parent / clean_path
+             # Try assuming it is in ui_ux_team/prototype_r
+             real_path = Path(resource_path(os.path.join("ui_ux_team/prototype_r", clean_path)))
 
         if not real_path.exists():
              print(f"Music file not found: {real_path}")
@@ -1636,8 +1639,17 @@ class MainUI(QWidget):
 
         if self._player is None:
             self._play_btn.set_image("assets/pause.png")
-            audio_path = Path(__file__).with_name(file_path)
-            self._player = MiniaudioPlayer(str(audio_path))
+            
+            clean_path = file_path
+            if clean_path.startswith("./"): clean_path = clean_path[2:]
+            
+            # Try resolving using resource_path
+            real_path = Path(resource_path(clean_path))
+            if not real_path.exists():
+                 # Try assuming it is in ui_ux_team/prototype_r
+                 real_path = Path(resource_path(os.path.join("ui_ux_team/prototype_r", clean_path)))
+
+            self._player = MiniaudioPlayer(str(real_path))
             self._player.set_volume(self._current_volume)  # Apply current volume
             self._player.start()
 
@@ -1859,7 +1871,7 @@ class MainUI(QWidget):
     
     @staticmethod
     def build_path(file_path):
-        BASE = os.path.dirname(__file__)
+        # Use global BASE which is resource_path aware
         return os.path.join(BASE, file_path)
     
     @staticmethod

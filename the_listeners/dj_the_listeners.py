@@ -18,11 +18,11 @@ import wave
 # Am ELIMINAT importul pydub de aici. Îl vom importa în funcția de conversie.
 
 # --- DEPENDENȚE GUI ---
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QPushButton, QLineEdit, QProgressBar, QMessageBox, QTextEdit
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PySide6.QtCore import Qt, QThread, Signal as pyqtSignal, QTimer
 
 
 # ----------------------------------------------------
@@ -216,7 +216,7 @@ class RecordingWorker(QThread):
 class DJGUIRecorder(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DJ BlueAI Multi-Channel Recorder (PyQt6)")
+        self.setWindowTitle("DJ BlueAI Multi-Channel Recorder (PySide6)")
         self.setGeometry(100, 100, 700, 500)
 
         # PyAudio este inițializat o singură dată
