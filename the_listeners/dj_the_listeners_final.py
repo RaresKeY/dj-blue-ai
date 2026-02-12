@@ -16,7 +16,7 @@ import pyaudio
 import wave
 
 # --- DEPENDENȚE GUI ---
-from PyQt6.QtCore import QThread, pyqtSignal
+from PySide6.QtCore import QThread, Signal as pyqtSignal
 
 from .audio_utils import suppress_alsa_warnings
 from .device_helpers import resolve_device_params
