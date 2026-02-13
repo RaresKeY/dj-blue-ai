@@ -38,7 +38,7 @@ ui_ux_team/blue_ui/
     preview_chat_window.py
     preview_transcript_window.py
     preview_widgets.py
-    run_preview.sh
+    run_preview.py
   docs/
     component_split_plan.md
   py_learn.py  # compatibility launcher shim
@@ -91,10 +91,10 @@ Code-first visual workflow with instant launch scripts.
 ### Command Shape
 ```bash
 cd ui_ux_team/blue_ui/previews
-./run_preview.sh main
-./run_preview.sh chat
-./run_preview.sh transcript
-./run_preview.sh widgets
+python run_preview.py main
+python run_preview.py chat
+python run_preview.py transcript
+python run_preview.py widgets
 ```
 
 ### Preview Behavior Rules
@@ -111,7 +111,7 @@ cd ui_ux_team/blue_ui/previews
 5. Add `app/composition.py` and wire all UI/service interactions.
 6. Add `app/main.py` as the canonical entrypoint.
 7. Convert `py_learn.py` into a compatibility shim that calls `app.main`.
-8. Add `previews/` scripts and `run_preview.sh`.
+8. Add `previews/` scripts and `run_preview.py`.
 
 ### Rollback Point
 Until step 7, original `py_learn.py` remains executable as today. If issues appear, keep old entrypoint and disable new composition import path.
