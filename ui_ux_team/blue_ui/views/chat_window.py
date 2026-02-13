@@ -72,6 +72,8 @@ class BlueBirdChatView(QWidget):
         self.input_field = InputBlueBird()
         self.send_btn = ImageButton(resource_path("ui_ux_team/assets/send_black.png"), size=(63, 63))
         self.load_transcript = ImageButton(resource_path("ui_ux_team/assets/load_transcript.png"), size=(40, 40))
+        self.load_transcript.setObjectName("LoadTranscriptButton")
+        self.load_transcript.setStyleSheet("QLabel#LoadTranscriptButton { background: transparent; border: none; }")
         self.loader = LoadingCircle(self)
 
         layout = QVBoxLayout(self)
@@ -105,6 +107,10 @@ class BlueBirdChatView(QWidget):
             QWidget {{
                 background-color: {tokens.COLOR_BG_MAIN};
                 color: {tokens.TEXT_PRIMARY};
+            }}
+            QLabel#LoadTranscriptButton {{
+                background: transparent;
+                border: none;
             }}
             """
         )

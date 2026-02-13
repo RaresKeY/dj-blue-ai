@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ui_ux_team.blue_ui.config import THEME_FILE, config_path, load_with_legacy_migration, save_json
+from ui_ux_team.blue_ui.config import get_setting, set_setting
 
 from . import tokens
 from .palettes import DEFAULT_THEME_KEY, THEMES
@@ -55,8 +55,7 @@ def ensure_default_theme() -> str:
 
 def _load_theme_key() -> str | None:
     try:
-        data = load_with_legacy_migration(THEME_FILE) or {}
-        key = str(data.get("selected_theme", "")).strip()
+        key = str(get_setting("selected_theme", "")).strip()
         return _KEY_MIGRATION.get(key, key) if key else None
     except Exception:
         return None
@@ -64,8 +63,7 @@ def _load_theme_key() -> str | None:
 
 def _save_theme_key(theme_key: str) -> None:
     try:
-        payload = {"selected_theme": theme_key}
-        save_json(config_path(THEME_FILE), payload)
+        set_setting("selected_theme", theme_key)
     except Exception:
         # Theme persistence should never crash UI runtime.
         pass

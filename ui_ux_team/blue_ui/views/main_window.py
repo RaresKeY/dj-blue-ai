@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPalette, QColor, QPixmap, QFont
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -26,7 +27,7 @@ from architects.helpers.miniaudio_player import MiniaudioPlayer
 from architects.helpers.resource_path import resource_path
 from architects.helpers.tabs_audio import get_display_names
 from architects.helpers.transcription_manager import TranscriptionManager
-from ui_ux_team.blue_ui.config import AUDIO_FILE, config_path, default_music_folder, load_with_legacy_migration, save_json
+from ui_ux_team.blue_ui.config import default_music_folder, get_setting, set_setting
 from ui_ux_team.blue_ui.theme import set_theme
 from ui_ux_team.blue_ui.theme import tokens as theme_tokens
 from ui_ux_team.blue_ui.views.chat_window import BlueBirdChatView
@@ -91,6 +92,7 @@ class MainUI(QWidget):
         self.transcript_line = 0
         self._music_folder = self._load_music_folder_setting()
         self._music_path_edit = None
+        self._music_empty_popup = None
 
         self.root = QVBoxLayout(self)
         self.root.setContentsMargins(0, 0, 0, 0)
@@ -98,6 +100,7 @@ class MainUI(QWidget):
 
         self.man_mem = ManagedMem()
         self._music_folder.mkdir(parents=True, exist_ok=True)
+        QTimer.singleShot(350, self._notify_if_music_folder_empty)
 
         mood_data_path = resource_path("mood_readers/data/mood_playlists_organized.json")
         with open(mood_data_path, "r", encoding="utf-8") as f:
@@ -142,8 +145,7 @@ class MainUI(QWidget):
         return default_music_folder()
 
     def _load_music_folder_setting(self) -> Path:
-        data = load_with_legacy_migration(AUDIO_FILE) or {}
-        stored = str(data.get("music_folder", "")).strip()
+        stored = str(get_setting("music_folder", "")).strip()
         candidate = Path(stored).expanduser() if stored else self._default_music_folder()
         if not candidate.exists():
             candidate = self._default_music_folder()
@@ -152,7 +154,88 @@ class MainUI(QWidget):
         return candidate
 
     def _save_music_folder_setting(self, folder: Path) -> None:
-        save_json(config_path(AUDIO_FILE), {"music_folder": str(folder.resolve())})
+        set_setting("music_folder", str(folder.resolve()))
+
+    @staticmethod
+    def _has_audio_files(folder: Path) -> bool:
+        exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"}
+        try:
+            for p in folder.iterdir():
+                if p.is_file() and p.suffix.lower() in exts:
+                    return True
+        except Exception:
+            return False
+        return False
+
+    def _notify_if_music_folder_empty(self):
+        if self._has_audio_files(self._music_folder):
+            return
+        msg = f"Music folder is empty: {self._music_folder}. Add audio files to enable playback."
+        print(msg)
+        self._show_music_folder_empty_popup()
+
+    def _show_music_folder_empty_popup(self):
+        if self._music_empty_popup is not None and self._music_empty_popup.isVisible():
+            self._music_empty_popup.raise_()
+            self._music_empty_popup.activateWindow()
+            return
+
+        popup = QDialog(self)
+        popup.setWindowTitle("Music Library")
+        popup.setModal(True)
+        popup.setMinimumWidth(460)
+
+        root = QVBoxLayout(popup)
+        root.setContentsMargins(16, 14, 16, 14)
+        root.setSpacing(10)
+
+        title = QLabel("Music folder is empty")
+        title.setStyleSheet(f"color: {theme_tokens.TEXT_PRIMARY}; font-size: 17px; font-weight: 700;")
+        body = QLabel(
+            f"Add audio files (.wav/.mp3/.flac/.ogg/.m4a/.aac) to:\n{self._music_folder}"
+        )
+        body.setWordWrap(True)
+        body.setStyleSheet(f"color: {theme_tokens.TEXT_MUTED}; font-size: 13px;")
+
+        close_btn = QPushButton("OK")
+        close_btn.clicked.connect(popup.accept)
+        close_btn.setStyleSheet(
+            """
+            QPushButton {
+                background: rgba(255, 138, 61, 0.14);
+                color: #FF8A3D;
+                border: 1px solid rgba(255, 138, 61, 0.62);
+                border-radius: 8px;
+                padding: 8px 18px;
+                font-weight: 600;
+                min-width: 90px;
+            }
+            QPushButton:hover {
+                background: rgba(255, 138, 61, 0.22);
+            }
+            """
+        )
+
+        action_row = QHBoxLayout()
+        action_row.addStretch(1)
+        action_row.addWidget(close_btn)
+
+        root.addWidget(title)
+        root.addWidget(body)
+        root.addLayout(action_row)
+
+        popup.setStyleSheet(
+            f"""
+            QDialog {{
+                background: {theme_tokens.COLOR_BG_MAIN};
+                border: 1px solid {theme_tokens.BORDER_SUBTLE};
+                border-radius: 12px;
+            }}
+            """
+        )
+        popup.finished.connect(lambda *_: setattr(self, "_music_empty_popup", None))
+        self._music_empty_popup = popup
+        popup.exec()
 
     def _resolve_music_path(self, music_path: str | Path) -> Path | None:
         raw = str(music_path or "").strip()
@@ -410,6 +493,7 @@ class MainUI(QWidget):
         self._save_music_folder_setting(self._music_folder)
         if self._music_path_edit is not None:
             self._music_path_edit.setText(str(self._music_folder))
+        self._notify_if_music_folder_empty()
 
     def _apply_theme_and_rebuild(self, theme_key: str):
         set_theme(theme_key)
@@ -497,6 +581,7 @@ class MainUI(QWidget):
         covers_layout.setSpacing(0)
         self._cover_carousel = SongCoverCarousel()
         self._cover_carousel.prev_requested.connect(self.prev_action)
+        self._cover_carousel.current_requested.connect(self.play_click)
         self._cover_carousel.next_requested.connect(self.next_action)
         covers_layout.addWidget(self._cover_carousel, alignment=Qt.AlignCenter)
         covers.setLayout(covers_layout)

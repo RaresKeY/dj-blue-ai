@@ -1,80 +1,65 @@
-# Config Persistence Report (Theme + Music Folder)
+# Config Persistence Report (Unified Runtime Config)
 
-## Current State
+## Implemented Model
 
-1. Theme config currently writes to:
+Config now uses one unified JSON file:
+- `config/app_config.json`
+
+Location policy:
+- always beside the running binary/script
+- config directory is created automatically at startup
+
+Examples:
+- binary run: `<binary_dir>/config/app_config.json`
+- source run: `<script_dir>/config/app_config.json`
+
+## Defaults Created on First Run
+
+On initialization, defaults are written if file is missing:
+```json
+{
+  "selected_theme": "dark_theme",
+  "music_folder": "<runtime_base_dir>/music_collection"
+}
+```
+
+Runtime folders auto-created:
+- `<runtime_base_dir>/config/`
+- `<runtime_base_dir>/music_collection/`
+
+## Migration Support
+
+If unified config is absent, app attempts legacy import from:
+- `config/theme_config.json`
+- `config/audio_config.json`
 - `ui_ux_team/blue_ui/config/theme_config.json`
-- Source: `ui_ux_team/blue_ui/theme/manager.py`
-  - `_CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"`
+- `ui_ux_team/blue_ui/config/audio_config.json`
 
-2. Music folder config:
-- Not implemented yet as a persisted JSON setting in current code.
-- Current runtime music folder logic is hardcoded in main UI:
-  - `ui_ux_team/blue_ui/views/main_window.py:91`
-  - `get_project_root() / "mood_music_collection"`
+Loaded values are normalized and saved into unified `app_config.json`.
 
-## Binary Build Behavior (Important)
+## Code Ownership
 
-Build config uses PyInstaller `--onefile`:
-- `build_binary.py` includes `--onefile`
+1. Path and folder policy:
+- `ui_ux_team/blue_ui/config/runtime_paths.py`
 
-In onefile mode, app code/resources are extracted to a temporary runtime location.
-Writing config relative to module `__file__` is unreliable because:
-- path may be temporary and reset each run
-- path may be read-only
-- writes can silently fail (theme manager currently catches exceptions)
+2. Unified settings store:
+- `ui_ux_team/blue_ui/config/settings_store.py`
 
-Result:
-- Theme persistence may appear to work in source runs but fail or reset in packaged binaries.
+3. Theme persistence integration:
+- `ui_ux_team/blue_ui/theme/manager.py`
 
-## Recommended Persistence Location
+4. Music folder persistence integration:
+- `ui_ux_team/blue_ui/views/main_window.py`
 
-Use per-user writable config directory (OS standard), not repo-relative paths.
+5. Startup initialization:
+- `ui_ux_team/blue_ui/app/composition.py`
 
-Recommended app namespace:
-- `dj-blue-ai` / `blue_ui`
+## Binary Behavior
 
-Suggested files:
-- `theme_config.json`
-- `audio_config.json` (for music folder)
+This model avoids module-relative temp extraction issues because config is resolved from runtime base directory, not from package source paths.
 
-Examples by OS:
-- Linux: `~/.config/dj-blue-ai/blue_ui/`
-- macOS: `~/Library/Application Support/dj-blue-ai/blue_ui/`
-- Windows: `%APPDATA%\\dj-blue-ai\\blue_ui\\`
+## User Feedback
 
-## Recommended JSON Schemas
-
-`theme_config.json`
-```json
-{
-  "selected_theme": "dark_theme"
-}
-```
-
-`audio_config.json`
-```json
-{
-  "music_folder": "/absolute/path/to/mood_music_collection"
-}
-```
-
-## Migration Plan
-
-1. On startup:
-- Try reading user config dir first.
-- If missing, fallback-read existing repo-local `ui_ux_team/blue_ui/config/*.json`.
-- If fallback exists, copy/migrate to user config dir.
-
-2. On save:
-- Always write to user config dir only.
-
-3. Validation:
-- If `music_folder` path does not exist, fallback to:
-  - `<executable_dir>/mood_music_collection` (frozen)
-  - `<project_root>/mood_music_collection` (source)
-
-## Practical Risk If Not Changed
-
-- Binary users lose saved theme after restart.
-- Future music-folder setting will also fail persistence in onefile builds if saved module-relative.
+If `music_collection` has no audio files, UI shows:
+- console message
+- toast notification in main window

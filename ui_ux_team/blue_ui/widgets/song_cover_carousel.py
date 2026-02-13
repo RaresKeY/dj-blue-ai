@@ -19,6 +19,7 @@ from ui_ux_team.blue_ui.widgets.image_button import IMAGE_NOT_FOUND, ImageButton
 class SongCoverCarousel(QWidget):
     prev_requested = Signal()
     next_requested = Signal()
+    current_requested = Signal()
     current_changed = Signal(str)
 
     def __init__(self, parent=None):
@@ -63,6 +64,7 @@ class SongCoverCarousel(QWidget):
         root.addLayout(row)
 
         self._prev.clicked.connect(self._on_prev_clicked)
+        self._current.clicked.connect(self._on_current_clicked)
         self._next.clicked.connect(self._on_next_clicked)
         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Expanding)
         self.setMinimumHeight(120)
@@ -122,6 +124,9 @@ class SongCoverCarousel(QWidget):
 
     def _on_next_clicked(self):
         self.next_requested.emit()
+
+    def _on_current_clicked(self):
+        self.current_requested.emit()
 
     def step_prev(self):
         if not self._covers:

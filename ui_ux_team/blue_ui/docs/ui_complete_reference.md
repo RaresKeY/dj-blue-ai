@@ -375,7 +375,7 @@ Theme application behavior:
 
 ## Audio and Music Pathing
 Main logic in `MainUI`:
-- Music folder persisted in `audio_config.json`
+- Music folder persisted in unified `app_config.json`
 - Folder selected in settings tab (folder picker)
 - Resolver probes in order:
   1. `resource_path(clean)`
@@ -395,12 +395,15 @@ Files:
 - `ui_ux_team/blue_ui/config/settings_store.py`
 
 Persisted JSON:
-- theme: `theme_config.json`
-- audio folder: `audio_config.json`
+- unified: `config/app_config.json`
 
 Storage location:
-- user config path per OS (`~/.config/dj-blue-ai/blue_ui` on Linux)
-- legacy repo config auto-migrated when present
+- runtime-adjacent config folder beside app:
+  - `<runtime_base_dir>/config/app_config.json`
+- runtime base:
+  - binary: directory containing executable
+  - source: directory containing running script (fallback: cwd)
+- legacy split config auto-migrated when present (`theme_config.json`, `audio_config.json`)
 
 ## Signals and Event Wiring Summary
 Main event links:

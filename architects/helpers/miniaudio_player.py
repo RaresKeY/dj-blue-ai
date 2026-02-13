@@ -93,8 +93,6 @@ class MiniaudioPlayer:
         # Note: If already playing, the generator will pick up the new value 
         # on the next chunk because it accesses self._volume in each iteration.
 
-        print(f"Volume: {self._volume}")
-
     def pause(self):
         """Pauses playback."""
         if self._device and self._running and not self._paused:

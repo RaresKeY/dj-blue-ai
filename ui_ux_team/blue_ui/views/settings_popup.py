@@ -11,8 +11,10 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QStackedWidget,
     QFrame,
+    QSizeGrip,
+    QGraphicsDropShadowEffect,
 )
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QColor
 from ui_ux_team.blue_ui.theme import tokens
 
 ORANGE_SELECTION = "#FF8A3D"
@@ -40,10 +42,26 @@ def _with_alpha(color: str, alpha: float) -> str:
     return c
 
 
+def _is_light(color: str) -> bool:
+    c = (color or "").strip()
+    if c.startswith("#") and len(c) in (4, 7):
+        if len(c) == 4:
+            r = int(c[1] * 2, 16)
+            g = int(c[2] * 2, 16)
+            b = int(c[3] * 2, 16)
+        else:
+            r = int(c[1:3], 16)
+            g = int(c[3:5], 16)
+            b = int(c[5:7], 16)
+        lum = (0.2126 * r) + (0.7152 * g) + (0.0722 * b)
+        return lum >= 170
+    return False
+
+
 class PopupTitleBar(QWidget):
     def __init__(self, title="Settings", parent=None):
         super().__init__(parent)
-        self.setFixedHeight(34)
+        self.setFixedHeight(40)
         self._drag_pos = None
         self._title_text = title
 
@@ -66,19 +84,19 @@ class PopupTitleBar(QWidget):
             f"""
             QLabel {{
                 color: {tokens.TEXT_PRIMARY};
-                font-size: 17px;
-                font-weight: 600;
+                font-size: 18px;
+                font-weight: 700;
                 font-family: Inter;
                 padding-left: 6px;
-                padding-top: 2px;
+                padding-top: 0px;
             }}
             QPushButton {{
-                background: {_with_alpha(tokens.BG_INPUT, 0.85)};
+                background: {_with_alpha(tokens.BG_INPUT, 1.0)};
                 color: {tokens.TEXT_PRIMARY};
                 border: 1px solid {tokens.BORDER_SUBTLE};
-                border-radius: 7px;
+                border-radius: 8px;
                 padding: 4px 8px;
-                font-size: 13px;
+                font-size: 14px;
             }}
             QPushButton:hover {{
                 background: rgba(255, 138, 61, 0.16);
@@ -107,14 +125,25 @@ class SettingsPopup(QWidget):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
         self.setObjectName("SettingsPopup")
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setAutoFillBackground(True)
 
         self.margin = margin
         self.setMinimumSize(560, 350)
         self.categories = categories or {}
 
+        self._shadow = QGraphicsDropShadowEffect(self)
+        self._shadow.setBlurRadius(40)
+        self._shadow.setOffset(0, 10)
+        self._shadow.setColor(QColor(0, 0, 0, 190))
+        self.setGraphicsEffect(self._shadow)
+
         self.list = QListWidget()
         self.list.setFixedWidth(190)
         self.list.setSpacing(6)
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.list.setTextElideMode(Qt.ElideRight)
         self.stack = QStackedWidget()
 
         for name, widget in self.categories.items():
@@ -136,41 +165,51 @@ class SettingsPopup(QWidget):
             self.list.setCurrentRow(0)
 
         root_layout = QVBoxLayout(self)
-        root_layout.setContentsMargins(8, 8, 8, 8)
-        root_layout.setSpacing(8)
+        root_layout.setContentsMargins(12, 10, 12, 10)
+        root_layout.setSpacing(10)
         self.title_bar = PopupTitleBar("Settings", self)
         root_layout.addWidget(self.title_bar)
 
         content_layout = QHBoxLayout()
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(10)
+        content_layout.setSpacing(12)
         content_layout.addWidget(self.list)
         content_layout.addWidget(self.stack)
         root_layout.addLayout(content_layout)
 
+        grip_row = QHBoxLayout()
+        grip_row.setContentsMargins(0, 0, 2, 2)
+        grip_row.addStretch(1)
+        self._size_grip = QSizeGrip(self)
+        self._size_grip.setToolTip("Resize")
+        grip_row.addWidget(self._size_grip, 0, Qt.AlignRight | Qt.AlignBottom)
+        root_layout.addLayout(grip_row)
+
         self.refresh_theme()
 
     def refresh_theme(self):
-        panel_bg = _with_alpha(tokens.COLOR_BG_MAIN, 0.97)
-        panel_border = _with_alpha(tokens.BORDER_SUBTLE, 0.78)
-        input_bg = _with_alpha(tokens.BG_INPUT, 0.95)
+        panel_bg = getattr(tokens, "COLOR_SETTINGS_BG", tokens.COLOR_BG_MAIN)
+        panel_border = _with_alpha(tokens.BORDER_SUBTLE, 1.0)
+        panel_outer = _with_alpha(tokens.PRIMARY, 0.48)
+        input_bg = _with_alpha(tokens.BG_INPUT, 1.0)
         input_focus_bg = _with_alpha(tokens.BG_INPUT, 1.0)
-        nav_bg = _with_alpha(tokens.BG_INPUT, 0.78)
-        stack_bg = _with_alpha(tokens.BG_INPUT, 0.62)
+        nav_bg = _with_alpha(tokens.BG_INPUT, 0.94)
+        stack_bg = _with_alpha(tokens.BG_INPUT, 0.98)
 
         self.setStyleSheet(
             f"""
             QWidget#SettingsPopup {{
-                background: {panel_bg};
-                border: 1px solid {panel_border};
-                border-radius: 14px;
+                background-color: {panel_bg};
+                border: 2px solid {panel_outer};
+                border-radius: 16px;
             }}
             QLineEdit {{
                 background: {input_bg};
                 border: 1px solid {tokens.BORDER_SUBTLE};
-                border-radius: 8px;
-                padding: 6px 8px;
+                border-radius: 10px;
+                padding: 8px 10px;
                 color: {tokens.TEXT_PRIMARY};
+                font-size: 14px;
             }}
             QLineEdit:focus {{
                 background: {input_focus_bg};
@@ -178,21 +217,24 @@ class SettingsPopup(QWidget):
             }}
             """
         )
+        shadow_color = QColor(0, 0, 0, 165 if _is_light(panel_bg) else 200)
+        self._shadow.setColor(shadow_color)
         self.list.setStyleSheet(
             f"""
             QListWidget {{
                 background: {nav_bg};
-                border: none;
+                border: 1px solid {panel_border};
                 color: {tokens.TEXT_MUTED};
-                border-radius: 10px;
-                padding: 6px;
+                border-radius: 12px;
+                padding: 8px;
                 outline: 0;
             }}
             QListWidget::item {{
                 background: transparent;
-                padding: 10px 12px;
-                border-radius: 8px;
+                padding: 12px 14px;
+                border-radius: 10px;
                 border: 1px solid transparent;
+                font-size: 15px;
             }}
             QListWidget::item:hover {{
                 background: rgba(255, 138, 61, 0.10);
@@ -221,9 +263,18 @@ class SettingsPopup(QWidget):
             f"""
             QStackedWidget {{
                 background: {stack_bg};
-                border: 1px solid {tokens.BORDER_SUBTLE};
-                border-radius: 10px;
-                padding: 8px;
+                border: 1px solid {panel_border};
+                border-radius: 12px;
+                padding: 10px;
+            }}
+            """
+        )
+        self._size_grip.setStyleSheet(
+            f"""
+            QSizeGrip {{
+                background: transparent;
+                width: 14px;
+                height: 14px;
             }}
             """
         )

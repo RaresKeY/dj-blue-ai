@@ -1,4 +1,4 @@
-"""JSON-backed settings store with legacy migration."""
+"""Unified JSON settings store with legacy migration."""
 
 from __future__ import annotations
 
@@ -6,18 +6,22 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .runtime_paths import ensure_user_config_dir, legacy_repo_config_dir, user_config_dir
+from .runtime_paths import default_music_folder, ensure_user_config_dir, legacy_repo_config_dir, user_config_dir
 
-THEME_FILE = "theme_config.json"
-AUDIO_FILE = "audio_config.json"
-
-
-def config_path(filename: str) -> Path:
-    return user_config_dir() / filename
+CONFIG_FILE = "app_config.json"
+_LEGACY_THEME = "theme_config.json"
+_LEGACY_AUDIO = "audio_config.json"
 
 
-def _legacy_path(filename: str) -> Path:
-    return legacy_repo_config_dir() / filename
+def config_path() -> Path:
+    return user_config_dir() / CONFIG_FILE
+
+
+def _legacy_paths(filename: str) -> list[Path]:
+    return [
+        user_config_dir() / filename,
+        legacy_repo_config_dir() / filename,
+    ]
 
 
 def load_json(path: Path) -> dict[str, Any] | None:
@@ -41,16 +45,64 @@ def save_json(path: Path, payload: dict[str, Any]) -> bool:
         return False
 
 
-def load_with_legacy_migration(filename: str) -> dict[str, Any] | None:
-    primary = config_path(filename)
-    data = load_json(primary)
-    if data is not None:
-        return data
+def default_config() -> dict[str, Any]:
+    return {
+        "selected_theme": "dark_theme",
+        "music_folder": str(default_music_folder()),
+    }
 
-    legacy = _legacy_path(filename)
-    legacy_data = load_json(legacy)
-    if legacy_data is None:
-        return None
 
-    save_json(primary, legacy_data)
-    return legacy_data
+def _normalized_config(raw: dict[str, Any] | None) -> dict[str, Any]:
+    base = default_config()
+    if not isinstance(raw, dict):
+        return base
+
+    out = dict(base)
+    theme = raw.get("selected_theme")
+    if isinstance(theme, str) and theme.strip():
+        out["selected_theme"] = theme.strip()
+
+    folder = raw.get("music_folder")
+    if isinstance(folder, str) and folder.strip():
+        out["music_folder"] = str(Path(folder).expanduser())
+
+    return out
+
+
+def _load_legacy_split_config() -> dict[str, Any]:
+    merged: dict[str, Any] = {}
+    for p in _legacy_paths(_LEGACY_THEME):
+        data = load_json(p)
+        if isinstance(data, dict) and isinstance(data.get("selected_theme"), str):
+            merged["selected_theme"] = data["selected_theme"]
+            break
+
+    for p in _legacy_paths(_LEGACY_AUDIO):
+        data = load_json(p)
+        if isinstance(data, dict) and isinstance(data.get("music_folder"), str):
+            merged["music_folder"] = data["music_folder"]
+            break
+    return merged
+
+
+def ensure_config_initialized() -> dict[str, Any]:
+    path = config_path()
+    current = load_json(path)
+    if current is None:
+        current = _load_legacy_split_config()
+
+    cfg = _normalized_config(current)
+    save_json(path, cfg)
+    return cfg
+
+
+def get_setting(key: str, default: Any = None) -> Any:
+    cfg = ensure_config_initialized()
+    return cfg.get(key, default)
+
+
+def set_setting(key: str, value: Any) -> bool:
+    cfg = ensure_config_initialized()
+    cfg[key] = value
+    cfg = _normalized_config(cfg)
+    return save_json(config_path(), cfg)

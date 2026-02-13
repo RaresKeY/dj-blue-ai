@@ -7,12 +7,14 @@ from architects.helpers.managed_mem import ManagedMem
 from architects.helpers.resource_path import resource_path
 from architects.helpers.transcription_manager import TranscriptionManager
 from ui_ux_team.blue_ui.app.services import AppServices, default_player_factory
+from ui_ux_team.blue_ui.config import ensure_config_initialized
 from ui_ux_team.blue_ui.theme import ensure_default_theme
 from ui_ux_team.blue_ui.views.main_window import MainWindowView
 
 
 class AppComposer:
     def __init__(self):
+        ensure_config_initialized()
         ensure_default_theme()
         self.services = self._build_services()
         self.window = MainWindowView()
