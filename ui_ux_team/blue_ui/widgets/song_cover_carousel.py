@@ -26,7 +26,7 @@ class SongCoverCarousel(QWidget):
         self._covers = self._load_covers()
         self._index = 0
         self._ratio_side_to_center = 2.0 / 3.0
-        self._preferred_center = 230
+        self._preferred_center = 9999
         self._min_center = 96
 
         self._prev = ImageButton(IMAGE_NOT_FOUND, size=(120, 120), fallback=IMAGE_NOT_FOUND)
@@ -144,17 +144,18 @@ class SongCoverCarousel(QWidget):
         max_center_by_w = int(usable_w / (1.0 + (2.0 * ratio)))
         max_center_by_h = usable_h
 
+        # Fill the layout box as much as possible without exceeding geometry.
         center = min(self._preferred_center, max_center_by_w, max_center_by_h)
-        center = max(56, center)
+        center = max(72, center)
         side = max(36, int(round(center * ratio)))
 
         self._current.setFixedSize(center, center)
         self._prev.setFixedSize(side, side)
         self._next.setFixedSize(side, side)
 
-        # Keep enough internal breathing room so 1.06 hover scale does not look clipped.
-        center_pad = max(4, int(center * 0.06))
-        side_pad = max(3, int(side * 0.06))
+        # Small padding preserves hover scale while keeping covers visually large.
+        center_pad = max(2, int(center * 0.03))
+        side_pad = max(2, int(side * 0.03))
         self._current.setContentsMargins(center_pad, center_pad, center_pad, center_pad)
         self._prev.setContentsMargins(side_pad, side_pad, side_pad, side_pad)
         self._next.setContentsMargins(side_pad, side_pad, side_pad, side_pad)
