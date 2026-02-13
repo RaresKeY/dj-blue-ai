@@ -32,6 +32,7 @@ ui_ux_team/prototype_r/transcripts
 ui_ux_team/prototype_r/transcripts_translated
 
 # Large music collection for testing ONLY
+music_collection
 mood_music_collection
 mood_music_collection.zip
 
@@ -39,3 +40,4 @@ mood_music_collection.zip
 build/
 dj-blue-ai.spec
 requirements-all.txt
+config
