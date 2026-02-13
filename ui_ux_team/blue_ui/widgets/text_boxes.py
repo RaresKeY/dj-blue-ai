@@ -108,7 +108,7 @@ class SearchBar(QTextEdit):
             }}
             QTextEdit#SearchBar:focus {{
                 border: 2px solid {tokens.PRIMARY};
-                background-color: #121A2B;
+                background-color: {tokens.BG_INPUT};
             }}
             """
         )

@@ -1,3 +1,5 @@
+import re
+
 from PySide6.QtCore import Qt, QSize, QPoint, Signal
 from PySide6.QtWidgets import (
     QWidget,
@@ -14,6 +16,28 @@ from PySide6.QtGui import QFont
 from ui_ux_team.blue_ui.theme import tokens
 
 ORANGE_SELECTION = "#FF8A3D"
+
+
+def _with_alpha(color: str, alpha: float) -> str:
+    a = max(0.0, min(1.0, float(alpha)))
+    c = (color or "").strip()
+    if c.startswith("#") and len(c) in (4, 7):
+        if len(c) == 4:
+            r = int(c[1] * 2, 16)
+            g = int(c[2] * 2, 16)
+            b = int(c[3] * 2, 16)
+        else:
+            r = int(c[1:3], 16)
+            g = int(c[3:5], 16)
+            b = int(c[5:7], 16)
+        return f"rgba({r}, {g}, {b}, {a:.3f})"
+
+    match = re.match(r"rgba?\(([^)]+)\)", c)
+    if match:
+        parts = [p.strip() for p in match.group(1).split(",")]
+        if len(parts) >= 3:
+            return f"rgba({parts[0]}, {parts[1]}, {parts[2]}, {a:.3f})"
+    return c
 
 
 class PopupTitleBar(QWidget):
@@ -49,7 +73,7 @@ class PopupTitleBar(QWidget):
                 padding-top: 2px;
             }}
             QPushButton {{
-                background: rgba(18, 27, 45, 0.85);
+                background: {_with_alpha(tokens.BG_INPUT, 0.85)};
                 color: {tokens.TEXT_PRIMARY};
                 border: 1px solid {tokens.BORDER_SUBTLE};
                 border-radius: 7px;
@@ -127,22 +151,29 @@ class SettingsPopup(QWidget):
         self.refresh_theme()
 
     def refresh_theme(self):
+        panel_bg = _with_alpha(tokens.COLOR_BG_MAIN, 0.97)
+        panel_border = _with_alpha(tokens.BORDER_SUBTLE, 0.78)
+        input_bg = _with_alpha(tokens.BG_INPUT, 0.95)
+        input_focus_bg = _with_alpha(tokens.BG_INPUT, 1.0)
+        nav_bg = _with_alpha(tokens.BG_INPUT, 0.78)
+        stack_bg = _with_alpha(tokens.BG_INPUT, 0.62)
+
         self.setStyleSheet(
             f"""
             QWidget#SettingsPopup {{
-                background: rgba(12, 18, 33, 0.98);
-                border: 1px solid rgba(67, 87, 131, 0.7);
+                background: {panel_bg};
+                border: 1px solid {panel_border};
                 border-radius: 14px;
             }}
             QLineEdit {{
-                background: rgba(16, 25, 43, 0.95);
-                border: 1px solid rgba(67, 87, 131, 0.55);
+                background: {input_bg};
+                border: 1px solid {tokens.BORDER_SUBTLE};
                 border-radius: 8px;
                 padding: 6px 8px;
                 color: {tokens.TEXT_PRIMARY};
             }}
             QLineEdit:focus {{
-                background: rgba(20, 36, 61, 0.95);
+                background: {input_focus_bg};
                 border: 1px solid {ORANGE_SELECTION};
             }}
             """
@@ -150,7 +181,7 @@ class SettingsPopup(QWidget):
         self.list.setStyleSheet(
             f"""
             QListWidget {{
-                background: rgba(13, 19, 32, 0.9);
+                background: {nav_bg};
                 border: none;
                 color: {tokens.TEXT_MUTED};
                 border-radius: 10px;
@@ -187,21 +218,42 @@ class SettingsPopup(QWidget):
             """
         )
         self.stack.setStyleSheet(
-            """
-            QStackedWidget {
-                background: rgba(17, 25, 42, 0.86);
-                border: 1px solid rgba(67, 87, 131, 0.55);
+            f"""
+            QStackedWidget {{
+                background: {stack_bg};
+                border: 1px solid {tokens.BORDER_SUBTLE};
                 border-radius: 10px;
                 padding: 8px;
-            }
+            }}
             """
         )
         self.title_bar.refresh_theme()
         for i in range(self.stack.count()):
             w = self.stack.widget(i)
+            if isinstance(w, QListWidget):
+                w.setStyleSheet(self._content_list_style())
             refresh = getattr(w, "refresh_theme", None)
             if callable(refresh):
                 refresh()
+
+    def _content_list_style(self) -> str:
+        return f"""
+        QListWidget {{
+            background: {_with_alpha(tokens.BG_INPUT, 0.88)};
+            color: {tokens.TEXT_PRIMARY};
+            border: 1px solid {tokens.BORDER_SUBTLE};
+            border-radius: 8px;
+            padding: 4px;
+        }}
+        QListWidget::item {{
+            padding: 8px 10px;
+            border-radius: 6px;
+        }}
+        QListWidget::item:selected {{
+            background: rgba(255, 138, 61, 0.16);
+            color: {ORANGE_SELECTION};
+        }}
+        """
 
     def show_pos_size(self, parent_pos: QPoint, parent_size):
         win = self.parent()
@@ -256,15 +308,15 @@ class FloatingMenu(QWidget):
         self.setStyleSheet(
             f"""
             QWidget#PopupInner {{
-                background-color: rgba(10, 10, 18, 240);
+                background-color: {_with_alpha(tokens.COLOR_BG_MAIN, 0.95)};
                 border-radius: 14px;
                 padding: 8px;
                 border: 1px solid {tokens.BORDER_SUBTLE};
             }}
 
             QLabel {{
-                background-color: rgba(20, 31, 52, 220);
-                border: 1px solid rgba(30, 144, 255, 70);
+                background-color: {_with_alpha(tokens.BG_INPUT, 0.82)};
+                border: 1px solid {_with_alpha(tokens.PRIMARY, 0.34)};
                 border-radius: 10px;
                 font-size: 20px;
                 padding: 10px 14px;
@@ -272,8 +324,8 @@ class FloatingMenu(QWidget):
             }}
 
             QLabel:hover {{
-                background-color: rgba(36, 53, 89, 230);
-                border: 1px solid rgba(255, 105, 180, 120);
+                background-color: {_with_alpha(tokens.BG_INPUT, 0.96)};
+                border: 1px solid {_with_alpha(tokens.ACCENT, 0.52)};
             }}
             """
         )

@@ -10,7 +10,9 @@ TARGET_TO_FILE = {
     "chat": "preview_chat_window.py",
     "transcript": "preview_transcript_window.py",
     "widgets": "preview_widgets.py",
+    "covers": "preview_cover_carousel.py",
     "volume": "preview_volume.py",
+    "timeline": "preview_timeline.py",
     "theme": "preview_theme_chooser.py",
 }
 

@@ -2,9 +2,10 @@ import json
 import os
 import random
 import sys
+import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPalette, QColor, QPixmap, QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -28,7 +29,9 @@ from ui_ux_team.blue_ui.views.settings_popup import FloatingMenu, SettingsPopup
 from ui_ux_team.blue_ui.views.transcript_window import TranscriptWindowView
 from ui_ux_team.blue_ui.widgets.image_button import ImageButton, IMAGE_NOT_FOUND
 from ui_ux_team.blue_ui.widgets.marquee import QueuedMarqueeLabel
+from ui_ux_team.blue_ui.widgets.song_cover_carousel import SongCoverCarousel
 from ui_ux_team.blue_ui.widgets.theme_chooser import ThemeChooserMenu
+from ui_ux_team.blue_ui.widgets.timeline import PlaybackTimeline
 from ui_ux_team.blue_ui.widgets.toast import FloatingToast
 from ui_ux_team.blue_ui.widgets.volume import IntegratedVolumeControl
 
@@ -69,6 +72,15 @@ class MainUI(QWidget):
         self._btn_prev = None
         self._btn_next = None
         self._btn_bluebird = None
+        self._cover_carousel = None
+        self._timeline = None
+        self._timeline_dummy_duration = 240.0
+        self._timeline_dummy_position = 0.0
+        self._timeline_seek_lock_until = 0.0
+        self._timeline_timer = QTimer(self)
+        self._timeline_timer.setInterval(120)
+        self._timeline_timer.timeout.connect(self._sync_timeline_from_player)
+        self._timeline_timer.start()
 
         self.transcription_manager = None
         self.transcript_line = 0
@@ -326,6 +338,8 @@ class MainUI(QWidget):
             if old_widget is not None:
                 old_widget.deleteLater()
         self.root.addWidget(self.build_main_layout())
+        if self._timeline is not None:
+            self._timeline.refresh_theme()
 
     def info_clicked(self):
         mood_items = [
@@ -345,7 +359,7 @@ class MainUI(QWidget):
     def build_sidebar(self):
         sidebar = self.color_box(theme_tokens.COLOR_SIDEBAR)
         layout = QVBoxLayout()
-        layout.setContentsMargins(2, 7, 2, 7)
+        layout.setContentsMargins(2, 7, 2, 12)
         layout.setSpacing(10)
 
         self._btn_transcript = self.button("assets/transcript_black.png", size=(60, 60))
@@ -389,18 +403,30 @@ class MainUI(QWidget):
         covers.setMinimumSize(500, 200)
 
         covers_layout = QHBoxLayout()
-        covers_images = [self.image_box("") for _ in range(3)]
-        for i, box in enumerate(covers_images):
-            box.setMinimumSize(50, 50)
-            box.setMaximumSize(180 if i == 1 else 120, 180 if i == 1 else 120)
-            covers_layout.addWidget(box)
+        covers_layout.setContentsMargins(0, 0, 0, 0)
+        covers_layout.setSpacing(0)
+        self._cover_carousel = SongCoverCarousel()
+        self._cover_carousel.prev_requested.connect(self.prev_action)
+        self._cover_carousel.next_requested.connect(self.next_action)
+        covers_layout.addWidget(self._cover_carousel, alignment=Qt.AlignCenter)
         covers.setLayout(covers_layout)
 
         return covers
 
     def build_main_timeline(self):
         timeline_box = self.color_box("transparent")
-        timeline_box.setFixedHeight(15)
+        timeline_layout = QVBoxLayout(timeline_box)
+        timeline_layout.setContentsMargins(0, 0, 0, 0)
+        timeline_layout.setSpacing(0)
+
+        self._timeline = PlaybackTimeline()
+        self._timeline.setFixedHeight(62)
+        self._timeline.seek_requested.connect(self._on_timeline_seek)
+        self._timeline.set_duration(self._timeline_dummy_duration)
+        self._timeline.set_position(self._timeline_dummy_position)
+        timeline_layout.addWidget(self._timeline)
+
+        self._sync_timeline_from_player()
         return timeline_box
 
     def build_timeline_volume_section(self):
@@ -419,6 +445,11 @@ class MainUI(QWidget):
             self._player = MiniaudioPlayer(str(real_path))
             self._player.set_volume(self._current_volume)
             self._player.start()
+            if self._timeline is not None:
+                duration = self._player.duration_seconds() if hasattr(self._player, "duration_seconds") else 0.0
+                position = self._player.position_seconds() if hasattr(self._player, "position_seconds") else 0.0
+                self._timeline.set_duration(duration)
+                self._timeline.set_position(position)
             return
 
         if self._player.paused:
@@ -437,17 +468,27 @@ class MainUI(QWidget):
 
         self._btn_prev = self.button("assets/prev.png", size=(35, 35))
         self._btn_prev.setObjectName("btn_prev")
+        self._btn_prev.clicked.connect(self.prev_action)
         self._play_btn = self.button("assets/play.png", size=(80, 80))
         self._play_btn.setObjectName("btn_play")
         self._play_btn.clicked.connect(self.play_click)
         self._btn_next = self.button("assets/next.png", size=(35, 35))
         self._btn_next.setObjectName("btn_next")
+        self._btn_next.clicked.connect(self.next_action)
 
         control_layer.addWidget(self._btn_prev)
         control_layer.addWidget(self._play_btn)
         control_layer.addWidget(self._btn_next)
 
         return controls
+
+    def prev_action(self):
+        if self._cover_carousel is not None:
+            self._cover_carousel.step_prev()
+
+    def next_action(self):
+        if self._cover_carousel is not None:
+            self._cover_carousel.step_next()
 
     def open_bluebird_chat(self):
         if self._bluebird_chat is None:
@@ -475,6 +516,36 @@ class MainUI(QWidget):
         self._current_volume = volume
         if self._player:
             self._player.set_volume(volume)
+
+    def _on_timeline_seek(self, target_seconds: float):
+        self._timeline_seek_lock_until = time.monotonic() + 0.25
+        if self._player is None:
+            self._timeline_dummy_position = max(0.0, min(self._timeline_dummy_duration, target_seconds))
+            if self._timeline is not None:
+                self._timeline.set_duration(self._timeline_dummy_duration)
+                self._timeline.set_position(self._timeline_dummy_position)
+            return
+        if hasattr(self._player, "seek"):
+            self._player.seek(target_seconds)
+        if self._timeline is not None:
+            position = self._player.position_seconds() if hasattr(self._player, "position_seconds") else target_seconds
+            self._timeline.set_position(position)
+
+    def _sync_timeline_from_player(self):
+        if self._timeline is None:
+            return
+        if self._timeline.is_interacting():
+            return
+        if time.monotonic() < self._timeline_seek_lock_until:
+            return
+        if self._player is None:
+            self._timeline.set_duration(self._timeline_dummy_duration)
+            self._timeline.set_position(self._timeline_dummy_position)
+            return
+        duration = self._player.duration_seconds() if hasattr(self._player, "duration_seconds") else 0.0
+        position = self._player.position_seconds() if hasattr(self._player, "position_seconds") else 0.0
+        self._timeline.set_duration(duration)
+        self._timeline.set_position(position)
 
     def build_main_bottom_panel(self):
         bottom_con = self.color_box("transparent")

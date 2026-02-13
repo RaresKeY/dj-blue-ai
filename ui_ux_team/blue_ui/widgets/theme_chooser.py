@@ -20,6 +20,7 @@ class ThemeChooserMenu(QWidget):
         self._button.setMenu(self._menu)
         self._build_menu()
         self.refresh_theme()
+        self._refresh_button_text()
 
     def _build_menu(self):
         self._menu.clear()
