@@ -6,7 +6,7 @@ from pathlib import Path
 def build():
     # Define paths
     base_dir = Path(__file__).parent
-    entry_point = base_dir / "ui_ux_team" / "prototype_r" / "py_learn.py"
+    entry_point = base_dir / "ui_ux_team" / "blue_ui" / "app" / "main.py"
     dist_dir = base_dir / "dist"
     build_dir = base_dir / "build"
     
@@ -39,6 +39,7 @@ def build():
     # We need to preserve the structure expected by resource_path
     
     # ui_ux_team/prototype_r/assets -> ui_ux_team/prototype_r/assets
+    # Keep legacy asset destination for current resource_path usage.
     assets_source = base_dir / "ui_ux_team" / "prototype_r" / "assets"
     assets_dest = "ui_ux_team/prototype_r/assets"
     

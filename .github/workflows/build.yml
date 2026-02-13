@@ -14,7 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
     - uses: actions/checkout@v4
@@ -40,6 +40,7 @@ jobs:
 
     - name: Build Binary
       run: |
+        python -c "import pathlib,sys; p=pathlib.Path('ui_ux_team/blue_ui/app/main.py'); sys.exit(0 if p.exists() else 1)"
         python build_binary.py
 
     - name: Upload Artifacts
@@ -72,6 +73,7 @@ jobs:
       with:
         files: |
           artifacts/dj-blue-ai-Linux/dj-blue-ai
+          artifacts/dj-blue-ai-macOS/dj-blue-ai
           artifacts/dj-blue-ai-Windows/dj-blue-ai.exe
         draft: false
         prerelease: false
