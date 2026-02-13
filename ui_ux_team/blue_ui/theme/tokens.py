@@ -1,4 +1,4 @@
-"""Shared theme tokens for prototype UI."""
+"""Shared mutable theme tokens for Blue UI."""
 
 # Core palette (ui_ux_team/design_docs/palette.txt)
 PRIMARY = "#1E90FF"
@@ -7,12 +7,12 @@ BACKGROUND = "#0A0A12"
 TEXT = "#E0E6ED"
 SECONDARY = "#6C63FF"
 
-COLOR_BG_MAIN = BACKGROUND
-COLOR_SIDEBAR = "#1A0F2A"
-COLOR_COVERS_BG = "#0E101A"
-COLOR_TIMELINE_BG = "#151A28"
-COLOR_BOTTOM_BG = "#0D0F18"
-COLOR_CONTROLS_BG = "#0D0F18"
+COLOR_BG_MAIN = "#070B17"
+COLOR_SIDEBAR = "#170A2A"
+COLOR_COVERS_BG = "transparent"
+COLOR_TIMELINE_BG = "rgba(44, 83, 140, 0.12)"
+COLOR_BOTTOM_BG = "rgba(8, 15, 34, 0.22)"
+COLOR_CONTROLS_BG = "transparent"
 COLOR_CONTROL_BTN = ACCENT
 
 TEXT_PRIMARY = TEXT
@@ -21,3 +21,6 @@ BG_INPUT = "#111624"
 BORDER_SUBTLE = "#2A3550"
 
 FONT_STACK = '"Inter", "Segoe UI", "Ubuntu", sans-serif'
+
+# Runtime theme state (updated by theme.manager.set_theme).
+CURRENT_THEME_KEY = "dark_theme"

@@ -11,6 +11,7 @@ TARGET_TO_FILE = {
     "transcript": "preview_transcript_window.py",
     "widgets": "preview_widgets.py",
     "volume": "preview_volume.py",
+    "theme": "preview_theme_chooser.py",
 }
 
 
