@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
 
 from architects.helpers.gemini_chatbot import GeminiChatbot
 from architects.helpers.resource_path import resource_path
+from ui_ux_team.blue_ui.theme import tokens
 from ui_ux_team.blue_ui.widgets.image_button import ImageButton
 from ui_ux_team.blue_ui.widgets.text_boxes import TextBoxAI, InputBlueBird
 from ui_ux_team.blue_ui.widgets.loading import LoadingCircle
@@ -84,6 +85,7 @@ class BlueBirdChatView(QWidget):
         self.input_field.message_sent.connect(self.handle_message)
         self.load_transcript.setParent(self)
         self.load_transcript.clicked.connect(self.open_file_picker)
+        self.refresh_theme()
 
         if self.api_key:
             self.chatbot = GeminiChatbot(self.api_key)
@@ -96,6 +98,18 @@ class BlueBirdChatView(QWidget):
             self.init_worker.start()
         else:
             self.text_box.append_message("system", "**System:** API Key missing.")
+
+    def refresh_theme(self):
+        self.setStyleSheet(
+            f"""
+            QWidget {{
+                background-color: {tokens.COLOR_BG_MAIN};
+                color: {tokens.TEXT_PRIMARY};
+            }}
+            """
+        )
+        self.text_box.refresh_theme()
+        self.input_field.refresh_theme()
 
     def closeEvent(self, event):
         self.closed.emit()

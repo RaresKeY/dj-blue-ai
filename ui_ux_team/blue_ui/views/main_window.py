@@ -21,11 +21,14 @@ from architects.helpers.miniaudio_player import MiniaudioPlayer
 from architects.helpers.resource_path import resource_path
 from architects.helpers.tabs_audio import get_display_names
 from architects.helpers.transcription_manager import TranscriptionManager
+from ui_ux_team.blue_ui.theme import set_theme
+from ui_ux_team.blue_ui.theme import tokens as theme_tokens
 from ui_ux_team.blue_ui.views.chat_window import BlueBirdChatView
 from ui_ux_team.blue_ui.views.settings_popup import FloatingMenu, SettingsPopup
 from ui_ux_team.blue_ui.views.transcript_window import TranscriptWindowView
 from ui_ux_team.blue_ui.widgets.image_button import ImageButton, IMAGE_NOT_FOUND
 from ui_ux_team.blue_ui.widgets.marquee import QueuedMarqueeLabel
+from ui_ux_team.blue_ui.widgets.theme_chooser import ThemeChooserMenu
 from ui_ux_team.blue_ui.widgets.toast import FloatingToast
 from ui_ux_team.blue_ui.widgets.volume import IntegratedVolumeControl
 
@@ -35,13 +38,6 @@ def get_project_root() -> Path:
         return Path(sys.executable).parent
     return Path(__file__).resolve().parents[3]
 
-
-COLOR_BG_MAIN = "#1E1E1E"
-COLOR_SIDEBAR = "#2A0A3C"
-COLOR_COVERS_BG = "#1E1E1E"
-COLOR_TIMELINE_BG = "#2A2A2A"
-COLOR_BOTTOM_BG = "#1E1E1E"
-COLOR_CONTROLS_BG = "#1E1E1E"
 
 BASE = resource_path("ui_ux_team/assets")
 T_CHUNK = 30
@@ -60,6 +56,19 @@ class MainUI(QWidget):
         self._paused = False
         self._currently_playing = "deep_purple_smoke_on_the_water.wav"
         self._current_volume = 0.8
+        self._bluebird_chat = None
+        self._settings_menu = None
+        self._meet_type = None
+        self._volume_control = None
+        self._btn_transcript = None
+        self._btn_api = None
+        self._btn_info = None
+        self._btn_meet_type = None
+        self._btn_user = None
+        self._btn_settings = None
+        self._btn_prev = None
+        self._btn_next = None
+        self._btn_bluebird = None
 
         self.transcription_manager = None
         self.transcript_line = 0
@@ -85,11 +94,6 @@ class MainUI(QWidget):
         self._current_session = f"SESSION [{self.man_mem.timestamp_helper()}]"
 
         self.transcript_ready.connect(self.handle_transcript_data)
-
-        self._bluebird_chat = None
-        self._settings_menu = None
-        self._meet_type = None
-        self._volume_control = None
 
         api_key = self.load_api_key()
         if api_key:
@@ -264,12 +268,64 @@ class MainUI(QWidget):
     def settings_menu(self):
         recording_tabs = QListWidget()
         recording_tabs.addItems([f"{x} | {(y[:30].rstrip() + '...') if len(y) > 30 else y}" for x, y in get_display_names()])
+        list_style = f"""
+        QListWidget {{
+            background: rgba(13, 19, 32, 0.35);
+            color: {theme_tokens.TEXT_PRIMARY};
+            border: 1px solid {theme_tokens.BORDER_SUBTLE};
+            border-radius: 8px;
+            padding: 4px;
+        }}
+        QListWidget::item {{
+            padding: 8px 10px;
+            border-radius: 6px;
+        }}
+        QListWidget::item:selected {{
+            background: rgba(255, 138, 61, 0.16);
+            color: #FF8A3D;
+        }}
+        """
+        recording_tabs.setStyleSheet(list_style)
+
+        theme_tab = QWidget()
+        theme_layout = QVBoxLayout(theme_tab)
+        theme_layout.setContentsMargins(8, 8, 8, 8)
+        theme_layout.setSpacing(8)
+        chooser = ThemeChooserMenu()
+        chooser.theme_selected.connect(self._apply_theme_and_rebuild)
+        theme_layout.addWidget(chooser)
+        theme_layout.addStretch(1)
 
         test_tab = QListWidget()
         test_tab.addItems(["test1", "test2"])
+        test_tab.setStyleSheet(list_style)
 
-        self._settings_menu = SettingsPopup({"Recording Sources": recording_tabs, "Test Tab": test_tab}, parent=self)
+        self._settings_menu = SettingsPopup(
+            {
+                "Recording Sources": recording_tabs,
+                "Theme Selection": theme_tab,
+                "Test Tab": test_tab,
+            },
+            parent=self,
+        )
         self._settings_menu.show_pos_size(self.pos(), self.size())
+
+    def _apply_theme_and_rebuild(self, theme_key: str):
+        set_theme(theme_key)
+        self._transcript_win.refresh_theme()
+        if self._bluebird_chat is not None:
+            self._bluebird_chat.refresh_theme()
+        if self._meet_type is not None:
+            self._meet_type.refresh_theme()
+        if self._settings_menu is not None:
+            self._settings_menu.close()
+            self._settings_menu = None
+        if self.root.count():
+            old_item = self.root.takeAt(0)
+            old_widget = old_item.widget()
+            if old_widget is not None:
+                old_widget.deleteLater()
+        self.root.addWidget(self.build_main_layout())
 
     def info_clicked(self):
         mood_items = [
@@ -287,34 +343,40 @@ class MainUI(QWidget):
         FloatingToast(self).show_message(mood)
 
     def build_sidebar(self):
-        sidebar = self.color_box(COLOR_SIDEBAR)
+        sidebar = self.color_box(theme_tokens.COLOR_SIDEBAR)
         layout = QVBoxLayout()
         layout.setContentsMargins(2, 7, 2, 7)
         layout.setSpacing(10)
 
-        transcript_button = self.button("assets/transcript_black.png", size=(60, 60))
-        transcript_button.clicked.connect(self.open_transcript)
-        layout.addWidget(transcript_button, alignment=Qt.AlignHCenter)
+        self._btn_transcript = self.button("assets/transcript_black.png", size=(60, 60))
+        self._btn_transcript.setObjectName("btn_transcript")
+        self._btn_transcript.clicked.connect(self.open_transcript)
+        layout.addWidget(self._btn_transcript, alignment=Qt.AlignHCenter)
 
-        api_button = self.button("assets/api_black.png", size=(50, 50))
-        layout.addWidget(api_button, alignment=Qt.AlignHCenter)
+        self._btn_api = self.button("assets/api_black.png", size=(50, 50))
+        self._btn_api.setObjectName("btn_api")
+        layout.addWidget(self._btn_api, alignment=Qt.AlignHCenter)
 
-        info_button = self.button("assets/info.png", size=(50, 50))
-        info_button.clicked.connect(self.info_clicked)
-        layout.addWidget(info_button, alignment=Qt.AlignHCenter)
+        self._btn_info = self.button("assets/info.png", size=(50, 50))
+        self._btn_info.setObjectName("btn_info")
+        self._btn_info.clicked.connect(self.info_clicked)
+        layout.addWidget(self._btn_info, alignment=Qt.AlignHCenter)
 
-        meet_type = self.button("assets/meet_type_black.png", size=(50, 50))
-        meet_type.clicked.connect(lambda: self.meet_type_menu(meet_type))
-        layout.addWidget(meet_type, alignment=Qt.AlignHCenter)
+        self._btn_meet_type = self.button("assets/meet_type_black.png", size=(50, 50))
+        self._btn_meet_type.setObjectName("btn_meet_type")
+        self._btn_meet_type.clicked.connect(lambda: self.meet_type_menu(self._btn_meet_type))
+        layout.addWidget(self._btn_meet_type, alignment=Qt.AlignHCenter)
 
         layout.addStretch(1)
 
-        user_button = self.button("assets/user_black.png", size=(60, 60))
-        layout.addWidget(user_button, alignment=Qt.AlignHCenter)
+        self._btn_user = self.button("assets/user_black.png", size=(60, 60))
+        self._btn_user.setObjectName("btn_user")
+        layout.addWidget(self._btn_user, alignment=Qt.AlignHCenter)
 
-        settings_button = self.button("assets/settings_black.png", size=(50, 50))
-        settings_button.clicked.connect(self.settings_menu)
-        layout.addWidget(settings_button, alignment=Qt.AlignHCenter)
+        self._btn_settings = self.button("assets/settings_black.png", size=(50, 50))
+        self._btn_settings.setObjectName("btn_settings")
+        self._btn_settings.clicked.connect(self.settings_menu)
+        layout.addWidget(self._btn_settings, alignment=Qt.AlignHCenter)
 
         sidebar.setMinimumWidth(70)
         sidebar.setMaximumWidth(70)
@@ -322,7 +384,7 @@ class MainUI(QWidget):
         return sidebar
 
     def build_cover_images(self):
-        covers = self.color_box(COLOR_COVERS_BG)
+        covers = self.color_box("transparent")
         covers.setContentsMargins(0, 0, 0, 0)
         covers.setMinimumSize(500, 200)
 
@@ -337,7 +399,7 @@ class MainUI(QWidget):
         return covers
 
     def build_main_timeline(self):
-        timeline_box = self.color_box(COLOR_TIMELINE_BG)
+        timeline_box = self.color_box("transparent")
         timeline_box.setFixedHeight(15)
         return timeline_box
 
@@ -369,18 +431,21 @@ class MainUI(QWidget):
     def build_main_controls(self):
         control_layer = QHBoxLayout()
         control_layer.setContentsMargins(10, 10, 10, 10)
-        controls = self.color_box(COLOR_CONTROLS_BG)
+        controls = self.color_box("transparent")
         controls.setMaximumHeight(100)
         controls.setLayout(control_layer)
 
-        prev_btn = self.button("assets/prev.png", size=(35, 35))
+        self._btn_prev = self.button("assets/prev.png", size=(35, 35))
+        self._btn_prev.setObjectName("btn_prev")
         self._play_btn = self.button("assets/play.png", size=(80, 80))
+        self._play_btn.setObjectName("btn_play")
         self._play_btn.clicked.connect(self.play_click)
-        next_btn = self.button("assets/next.png", size=(35, 35))
+        self._btn_next = self.button("assets/next.png", size=(35, 35))
+        self._btn_next.setObjectName("btn_next")
 
-        control_layer.addWidget(prev_btn)
+        control_layer.addWidget(self._btn_prev)
         control_layer.addWidget(self._play_btn)
-        control_layer.addWidget(next_btn)
+        control_layer.addWidget(self._btn_next)
 
         return controls
 
@@ -401,9 +466,10 @@ class MainUI(QWidget):
         self._bluebird_chat = None
 
     def build_blue_bird(self):
-        blue_bird = self.button("assets/blue_bird.png", size=(70, 70))
-        blue_bird.clicked.connect(self.open_bluebird_chat)
-        return blue_bird
+        self._btn_bluebird = self.button("assets/blue_bird.png", size=(70, 70))
+        self._btn_bluebird.setObjectName("btn_bluebird")
+        self._btn_bluebird.clicked.connect(self.open_bluebird_chat)
+        return self._btn_bluebird
 
     def set_volume(self, volume):
         self._current_volume = volume
@@ -411,7 +477,7 @@ class MainUI(QWidget):
             self._player.set_volume(volume)
 
     def build_main_bottom_panel(self):
-        bottom_con = self.color_box(COLOR_BOTTOM_BG)
+        bottom_con = self.color_box("transparent")
         bottom_layout = QVBoxLayout()
         bottom_layout.setContentsMargins(10, 10, 10, 10)
         bottom_layout.setSpacing(4)
@@ -485,17 +551,24 @@ class MainUI(QWidget):
         layout.addWidget(self.build_timeline_volume_section())
         layout.addWidget(self.build_main_bottom_panel())
 
-        main_box = self.color_box(COLOR_BG_MAIN)
+        main_box = self.color_box(theme_tokens.COLOR_BG_MAIN)
         main_box.setLayout(layout)
         return main_box
 
     @staticmethod
     def color_box(color):
         box = QFrame()
-        box.setAutoFillBackground(True)
-        pal = box.palette()
-        pal.setColor(QPalette.Window, QColor(color))
-        box.setPalette(pal)
+        if isinstance(color, str) and color.startswith("rgba("):
+            box.setStyleSheet(f"background-color: {color}; border: none;")
+            box.setAutoFillBackground(False)
+        elif color == "transparent":
+            box.setStyleSheet("background-color: transparent; border: none;")
+            box.setAutoFillBackground(False)
+        else:
+            box.setAutoFillBackground(True)
+            pal = box.palette()
+            pal.setColor(QPalette.Window, QColor(color))
+            box.setPalette(pal)
         return box
 
     @staticmethod

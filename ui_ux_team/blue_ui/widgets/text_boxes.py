@@ -4,6 +4,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QTextBrowser, QTextEdit, QPlainTextEdit
 
 from ui_ux_team.blue_ui.theme.styles import textbox_ai_style, input_style, textbox_style
+from ui_ux_team.blue_ui.theme import tokens
 
 
 class TextBoxAI(QTextBrowser):
@@ -11,6 +12,9 @@ class TextBoxAI(QTextBrowser):
         super().__init__()
         self.setObjectName("TextBox")
         self.setOpenExternalLinks(True)
+        self.refresh_theme()
+
+    def refresh_theme(self):
         self.setStyleSheet(textbox_ai_style())
 
     def append_message(self, role: str, text: str):
@@ -19,20 +23,20 @@ class TextBoxAI(QTextBrowser):
 
         if role == "user":
             sender = "You"
-            color = "#5EA2FF"
+            color = tokens.PRIMARY
         elif role == "model":
             sender = "BlueBird"
-            color = "#2ECC71"
+            color = tokens.ACCENT
         else:
             sender = "System"
-            color = "#95A5A6"
+            color = tokens.TEXT_MUTED
 
         html_block = f"""
         <div style=\"margin-top: 10px; margin-bottom: 5px;\">
             <span style=\"color: {color}; font-weight: bold; font-size: 16px;\">{sender}</span>
         </div>
-        <div style=\"color: #E0E0E0; margin-bottom: 10px;\">{html_content}</div>
-        <hr style=\"background-color: #2A2D31; height: 1px; border: none; margin: 10px 0;\">
+        <div style=\"color: {tokens.TEXT_PRIMARY}; margin-bottom: 10px;\">{html_content}</div>
+        <hr style=\"background-color: #2A3550; height: 1px; border: none; margin: 10px 0;\">
         """
 
         self.append("")
@@ -51,6 +55,9 @@ class InputBlueBird(QTextEdit):
         self.setFont(font)
         self.setFixedHeight(70)
         self.setPlaceholderText("Type a message to BlueBird AI (Ctrl+Enter to send)")
+        self.refresh_theme()
+
+    def refresh_theme(self):
         self.setStyleSheet(input_style())
 
     def keyPressEvent(self, e):
@@ -72,6 +79,9 @@ class TextBox(QPlainTextEdit):
         super().__init__()
         self.setObjectName("TextBox")
         self.setReadOnly(True)
+        self.refresh_theme()
+
+    def refresh_theme(self):
         self.setStyleSheet(textbox_style())
 
 
@@ -82,20 +92,23 @@ class SearchBar(QTextEdit):
         self.setFixedHeight(48)
         self.setPlaceholderText("Search transcript...")
         self.setFont(QFont("Inter", 13))
+        self.refresh_theme()
+
+    def refresh_theme(self):
         self.setStyleSheet(
-            """
-            QTextEdit#SearchBar {
-                background-color: #161616;
-                color: #D0D0D0;
-                border: 1px solid #303236;
+            f"""
+            QTextEdit#SearchBar {{
+                background-color: {tokens.BG_INPUT};
+                color: {tokens.TEXT_PRIMARY};
+                border: 1px solid {tokens.BORDER_SUBTLE};
                 border-radius: 8px;
                 padding: 10px 14px;
                 font-size: 14px;
                 font-family: "Inter", "Segoe UI", "Ubuntu", sans-serif;
-            }
-            QTextEdit#SearchBar:focus {
-                border: 2px solid #ff7139;
-                background-color: #1A1A1A;
-            }
+            }}
+            QTextEdit#SearchBar:focus {{
+                border: 2px solid {tokens.PRIMARY};
+                background-color: #121A2B;
+            }}
             """
         )

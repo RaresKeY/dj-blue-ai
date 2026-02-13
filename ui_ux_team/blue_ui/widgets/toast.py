@@ -2,14 +2,16 @@ import random
 from PySide6.QtWidgets import QLabel, QGraphicsOpacityEffect
 from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
 
+from ui_ux_team.blue_ui.theme import tokens
+
 
 class FloatingToast(QLabel):
-    def __init__(self, parent=None, bg="#1f1f1f", fg="#a3a3a3", font_size=25, border="#303030"):
+    def __init__(self, parent=None, bg=None, fg=None, font_size=25, border=None):
         super().__init__(parent)
-        self._bg = bg
-        self._fg = fg
+        self._bg = bg if bg is not None else "#101726"
+        self._fg = fg if fg is not None else tokens.TEXT_PRIMARY
         self._font_size = font_size
-        self._border = border
+        self._border = border if border is not None else tokens.SECONDARY
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setVisible(False)

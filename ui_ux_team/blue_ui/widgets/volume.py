@@ -3,6 +3,7 @@ from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QSlider, QToolButton, QWidget
 
 from architects.helpers.resource_path import resource_path
+from ui_ux_team.blue_ui.theme import tokens
 
 
 class IntegratedVolumeControl(QWidget):
@@ -77,57 +78,57 @@ class IntegratedVolumeControl(QWidget):
 
     def _apply_style(self):
         self.setStyleSheet(
-            """
-            QWidget#IntegratedVolumeControl {
-                background: #12161f;
-                border: 1px solid #2c3444;
+            f"""
+            QWidget#IntegratedVolumeControl {{
+                background: transparent;
+                border: none;
                 border-radius: 14px;
-            }
-            QToolButton#VolumeIcon {
+            }}
+            QToolButton#VolumeIcon {{
                 border: none;
                 background: transparent;
                 padding: 0;
                 margin: 0;
-            }
-            QToolButton#VolumeIcon:hover {
+            }}
+            QToolButton#VolumeIcon:hover {{
                 border: none;
                 background: transparent;
-            }
-            QToolButton#VolumeIcon:pressed {
+            }}
+            QToolButton#VolumeIcon:pressed {{
                 border: none;
                 background: transparent;
                 padding: 0;
                 margin: 0;
-            }
-            QWidget#VolumeSliderWrap {
-                background: #1a2130;
-                border: 1px solid #2f3a4f;
+            }}
+            QWidget#VolumeSliderWrap {{
+                background: transparent;
+                border: none;
                 border-radius: 10px;
-            }
-            QSlider::groove:horizontal {
+            }}
+            QSlider::groove:horizontal {{
                 height: 5px;
-                background: #111723;
+                background: #0A0F18;
                 border-radius: 3px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #6f97ff;
+            }}
+            QSlider::sub-page:horizontal {{
+                background: {tokens.PRIMARY};
                 border-radius: 3px;
-            }
-            QSlider::add-page:horizontal {
-                background: #273246;
+            }}
+            QSlider::add-page:horizontal {{
+                background: #1C2740;
                 border-radius: 3px;
-            }
-            QSlider::handle:horizontal {
-                background: #f2f6ff;
-                border: 1px solid #c6d8ff;
+            }}
+            QSlider::handle:horizontal {{
+                background: {tokens.TEXT_PRIMARY};
+                border: 1px solid {tokens.SECONDARY};
                 width: 14px;
                 margin: -5px 0;
                 border-radius: 7px;
-            }
-            QSlider::handle:horizontal:hover {
+            }}
+            QSlider::handle:horizontal:hover {{
                 background: #ffffff;
-                border-color: #8eb0ff;
-            }
+                border-color: {tokens.ACCENT};
+            }}
             """
         )
 
