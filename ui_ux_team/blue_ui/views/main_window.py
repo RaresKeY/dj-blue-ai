@@ -9,10 +9,14 @@ from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPalette, QColor, QPixmap, QFont
 from PySide6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
+    QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -22,6 +26,7 @@ from architects.helpers.miniaudio_player import MiniaudioPlayer
 from architects.helpers.resource_path import resource_path
 from architects.helpers.tabs_audio import get_display_names
 from architects.helpers.transcription_manager import TranscriptionManager
+from ui_ux_team.blue_ui.config import AUDIO_FILE, config_path, default_music_folder, load_with_legacy_migration, save_json
 from ui_ux_team.blue_ui.theme import set_theme
 from ui_ux_team.blue_ui.theme import tokens as theme_tokens
 from ui_ux_team.blue_ui.views.chat_window import BlueBirdChatView
@@ -84,14 +89,15 @@ class MainUI(QWidget):
 
         self.transcription_manager = None
         self.transcript_line = 0
+        self._music_folder = self._load_music_folder_setting()
+        self._music_path_edit = None
 
         self.root = QVBoxLayout(self)
         self.root.setContentsMargins(0, 0, 0, 0)
         self.root.addWidget(self.build_main_layout())
 
         self.man_mem = ManagedMem()
-        music_folder = get_project_root() / "mood_music_collection"
-        music_folder.mkdir(parents=True, exist_ok=True)
+        self._music_folder.mkdir(parents=True, exist_ok=True)
 
         mood_data_path = resource_path("mood_readers/data/mood_playlists_organized.json")
         with open(mood_data_path, "r", encoding="utf-8") as f:
@@ -115,12 +121,9 @@ class MainUI(QWidget):
             print("Missing API Key, TranscriptionManager not initialized")
 
     def basic_music_play(self, music_path):
-        clean_path = music_path[2:] if music_path.startswith("./") else music_path
-        real_path = Path(resource_path(clean_path))
-        if not real_path.exists():
-            real_path = Path(resource_path(os.path.join("ui_ux_team/assets", clean_path)))
-        if not real_path.exists():
-            print(f"Music file not found: {real_path}")
+        real_path = self._resolve_music_path(music_path)
+        if real_path is None:
+            print(f"Music file not found for input: {music_path}")
             return
 
         if self._player and self._currently_playing == music_path and self._player.is_playing():
@@ -134,6 +137,48 @@ class MainUI(QWidget):
         self._player = MiniaudioPlayer(str(real_path))
         self._player.set_volume(self._current_volume)
         self._player.start()
+
+    def _default_music_folder(self) -> Path:
+        return default_music_folder()
+
+    def _load_music_folder_setting(self) -> Path:
+        data = load_with_legacy_migration(AUDIO_FILE) or {}
+        stored = str(data.get("music_folder", "")).strip()
+        candidate = Path(stored).expanduser() if stored else self._default_music_folder()
+        if not candidate.exists():
+            candidate = self._default_music_folder()
+        candidate.mkdir(parents=True, exist_ok=True)
+        self._save_music_folder_setting(candidate)
+        return candidate
+
+    def _save_music_folder_setting(self, folder: Path) -> None:
+        save_json(config_path(AUDIO_FILE), {"music_folder": str(folder.resolve())})
+
+    def _resolve_music_path(self, music_path: str | Path) -> Path | None:
+        raw = str(music_path or "").strip()
+        if not raw:
+            return None
+
+        candidate = Path(raw).expanduser()
+        if candidate.is_absolute() and candidate.exists():
+            return candidate
+
+        clean = raw[2:] if raw.startswith("./") else raw
+        rel = Path(clean)
+
+        probes = [
+            Path(resource_path(clean)),
+            Path(resource_path(os.path.join("ui_ux_team/assets", clean))),
+            self._music_folder / rel.name,
+            self._music_folder / rel,
+            Path.cwd() / rel,
+            get_project_root() / rel,
+        ]
+        for p in probes:
+            if p.exists():
+                return p
+        # Keep runtime resilient even when files are missing at dev/test time.
+        return probes[2] if len(probes) > 2 else probes[0]
 
     def handle_transcript_data(self, data: dict):
         text = TranscriptionManager.format_transcript_text(data)
@@ -308,6 +353,36 @@ class MainUI(QWidget):
         theme_layout.addWidget(chooser)
         theme_layout.addStretch(1)
 
+        music_tab = QWidget()
+        music_layout = QVBoxLayout(music_tab)
+        music_layout.setContentsMargins(8, 8, 8, 8)
+        music_layout.setSpacing(10)
+        music_label = QLabel("Music folder")
+        music_label.setStyleSheet(f"color: {theme_tokens.TEXT_PRIMARY}; font-size: 14px; font-weight: 600;")
+        self._music_path_edit = QLineEdit(str(self._music_folder))
+        self._music_path_edit.setReadOnly(True)
+        music_pick_btn = QPushButton("Choose folder")
+        music_pick_btn.clicked.connect(self._pick_music_folder)
+        music_pick_btn.setStyleSheet(
+            """
+            QPushButton {
+                background: rgba(255, 138, 61, 0.14);
+                color: #FF8A3D;
+                border: 1px solid rgba(255, 138, 61, 0.62);
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: rgba(255, 138, 61, 0.22);
+            }
+            """
+        )
+        music_layout.addWidget(music_label)
+        music_layout.addWidget(self._music_path_edit)
+        music_layout.addWidget(music_pick_btn, alignment=Qt.AlignLeft)
+        music_layout.addStretch(1)
+
         test_tab = QListWidget()
         test_tab.addItems(["test1", "test2"])
         test_tab.setStyleSheet(list_style)
@@ -316,11 +391,25 @@ class MainUI(QWidget):
             {
                 "Recording Sources": recording_tabs,
                 "Theme Selection": theme_tab,
+                "Music Library": music_tab,
                 "Test Tab": test_tab,
             },
             parent=self,
         )
         self._settings_menu.show_pos_size(self.pos(), self.size())
+
+    def _pick_music_folder(self):
+        selected = QFileDialog.getExistingDirectory(self, "Select Music Folder", str(self._music_folder))
+        if not selected:
+            return
+        chosen = Path(selected).expanduser()
+        if not chosen.exists():
+            return
+        self._music_folder = chosen
+        self._music_folder.mkdir(parents=True, exist_ok=True)
+        self._save_music_folder_setting(self._music_folder)
+        if self._music_path_edit is not None:
+            self._music_path_edit.setText(str(self._music_folder))
 
     def _apply_theme_and_rebuild(self, theme_key: str):
         set_theme(theme_key)
@@ -400,7 +489,8 @@ class MainUI(QWidget):
     def build_cover_images(self):
         covers = self.color_box("transparent")
         covers.setContentsMargins(0, 0, 0, 0)
-        covers.setMinimumSize(500, 200)
+        covers.setMinimumHeight(220)
+        covers.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         covers_layout = QHBoxLayout()
         covers_layout.setContentsMargins(0, 0, 0, 0)
@@ -420,7 +510,7 @@ class MainUI(QWidget):
         timeline_layout.setSpacing(0)
 
         self._timeline = PlaybackTimeline()
-        self._timeline.setFixedHeight(62)
+        self._timeline.setFixedHeight(52)
         self._timeline.seek_requested.connect(self._on_timeline_seek)
         self._timeline.set_duration(self._timeline_dummy_duration)
         self._timeline.set_position(self._timeline_dummy_position)
@@ -436,12 +526,11 @@ class MainUI(QWidget):
         file_path = file_path or self._currently_playing
 
         if self._player is None:
+            real_path = self._resolve_music_path(file_path)
+            if real_path is None:
+                print(f"Music file not found for input: {file_path}")
+                return
             self._play_btn.set_image("assets/pause.png")
-            clean_path = file_path[2:] if file_path.startswith("./") else file_path
-            real_path = Path(resource_path(clean_path))
-            if not real_path.exists():
-                real_path = Path(resource_path(os.path.join("ui_ux_team/assets", clean_path)))
-
             self._player = MiniaudioPlayer(str(real_path))
             self._player.set_volume(self._current_volume)
             self._player.start()
@@ -461,9 +550,12 @@ class MainUI(QWidget):
 
     def build_main_controls(self):
         control_layer = QHBoxLayout()
-        control_layer.setContentsMargins(10, 10, 10, 10)
+        control_layer.setContentsMargins(10, 0, 10, 10)
+        control_layer.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         controls = self.color_box("transparent")
+        controls.setFixedWidth(290)
         controls.setMaximumHeight(100)
+        controls.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         controls.setLayout(control_layer)
 
         self._btn_prev = self.button("assets/prev.png", size=(35, 35))
@@ -476,9 +568,9 @@ class MainUI(QWidget):
         self._btn_next.setObjectName("btn_next")
         self._btn_next.clicked.connect(self.next_action)
 
-        control_layer.addWidget(self._btn_prev)
-        control_layer.addWidget(self._play_btn)
-        control_layer.addWidget(self._btn_next)
+        control_layer.addWidget(self._btn_prev, 0, Qt.AlignVCenter)
+        control_layer.addWidget(self._play_btn, 0, Qt.AlignVCenter)
+        control_layer.addWidget(self._btn_next, 0, Qt.AlignVCenter)
 
         return controls
 
@@ -575,12 +667,15 @@ class MainUI(QWidget):
         volume_slot.setFixedSize(slot_width, slot_height)
         volume_layout = QHBoxLayout(volume_slot)
         volume_layout.setContentsMargins(0, 0, 0, 0)
+        volume_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         volume_layout.addWidget(self._volume_control, alignment=Qt.AlignLeft | Qt.AlignTop)
 
         # Deterministic order: [spacer][controls][volume]
+        top_row.addStretch(1)
         top_row.addWidget(left_placeholder, alignment=Qt.AlignTop)
         top_row.addWidget(controls, alignment=Qt.AlignTop)
         top_row.addWidget(volume_slot, alignment=Qt.AlignTop)
+        top_row.addStretch(1)
 
         # Bottom row: bird anchored bottom-left as its own layout.
         bottom_row = QHBoxLayout()
@@ -599,7 +694,7 @@ class MainUI(QWidget):
     def build_main_panel(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setSpacing(4)
 
         mood_items = [
             "😊 Positive",
@@ -618,7 +713,7 @@ class MainUI(QWidget):
         self.mood_tag.setMaximumHeight(30)
 
         layout.addWidget(self.mood_tag)
-        layout.addWidget(self.build_cover_images(), alignment=Qt.AlignCenter | Qt.AlignBottom)
+        layout.addWidget(self.build_cover_images(), 1)
         layout.addWidget(self.build_timeline_volume_section())
         layout.addWidget(self.build_main_bottom_panel())
 

@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
+
+from ui_ux_team.blue_ui.config import THEME_FILE, config_path, load_with_legacy_migration, save_json
 
 from . import tokens
 from .palettes import DEFAULT_THEME_KEY, THEMES
-
-_CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
-_CONFIG_FILE = _CONFIG_DIR / "theme_config.json"
 
 # Migrate old keys if they exist in persisted config.
 _KEY_MIGRATION = {
@@ -58,10 +55,7 @@ def ensure_default_theme() -> str:
 
 def _load_theme_key() -> str | None:
     try:
-        if not _CONFIG_FILE.exists():
-            return None
-        with open(_CONFIG_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = load_with_legacy_migration(THEME_FILE) or {}
         key = str(data.get("selected_theme", "")).strip()
         return _KEY_MIGRATION.get(key, key) if key else None
     except Exception:
@@ -70,10 +64,8 @@ def _load_theme_key() -> str | None:
 
 def _save_theme_key(theme_key: str) -> None:
     try:
-        _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         payload = {"selected_theme": theme_key}
-        with open(_CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
+        save_json(config_path(THEME_FILE), payload)
     except Exception:
         # Theme persistence should never crash UI runtime.
         pass

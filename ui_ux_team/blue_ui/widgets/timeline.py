@@ -88,7 +88,7 @@ class PlaybackTimeline(QWidget):
         self._hover_ratio = 0.0
         self._groove_h = 4
         self._handle_size = 14
-        self._vertical_pad = 10
+        self._bottom_pad = 4
 
         self.elapsed_label = QLabel("0:00")
         self.total_label = QLabel("0:00")
@@ -97,24 +97,26 @@ class PlaybackTimeline(QWidget):
         self.slider.setValue(0)
         self.slider.setTracking(True)
         self.slider.setMouseTracking(True)
-        self.slider.setMinimumHeight(20)
-        self.slider.setMaximumHeight(20)
+        self.slider.setMinimumHeight(18)
+        self.slider.setMaximumHeight(18)
         self._slider_wrap = QWidget()
         self._slider_wrap_layout = QVBoxLayout(self._slider_wrap)
-        self._slider_wrap_layout.setContentsMargins(0, self._vertical_pad, 0, self._vertical_pad)
+        # No top padding so covers get more vertical space.
+        self._slider_wrap_layout.setContentsMargins(0, 0, 0, self._bottom_pad)
         self._slider_wrap_layout.setSpacing(0)
         self._slider_wrap_layout.addWidget(self.slider)
 
         labels = QHBoxLayout()
         labels.setContentsMargins(0, 0, 0, 0)
         labels.setSpacing(8)
+        self.elapsed_label.setContentsMargins(8, 0, 0, 0)
         labels.addWidget(self.elapsed_label, 0, Qt.AlignLeft)
         labels.addStretch(1)
         labels.addWidget(self.total_label, 0, Qt.AlignRight)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(6)
+        root.setSpacing(2)
         root.addLayout(labels)
         root.addWidget(self._slider_wrap, 1)
 
@@ -143,7 +145,7 @@ class PlaybackTimeline(QWidget):
         self._groove_h = 9 if self._hovered else 5
         self._handle_size = 14
         # Keep layout geometry stable to avoid hover jiggle.
-        self._slider_wrap_layout.setContentsMargins(0, self._vertical_pad, 0, self._vertical_pad)
+        self._slider_wrap_layout.setContentsMargins(0, 0, 0, self._bottom_pad)
 
         self.setStyleSheet(
             f"""

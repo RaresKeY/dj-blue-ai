@@ -1,6 +1,6 @@
 import os
 from PySide6.QtWidgets import QLabel
-from PySide6.QtGui import QPixmap, QCursor, QPainter
+from PySide6.QtGui import QPixmap, QCursor, QPainter, QPainterPath
 from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve, Property
 
 from architects.helpers.resource_path import resource_path
@@ -17,6 +17,7 @@ class ImageButton(QLabel):
         self.setFixedSize(*size)
         self.setCursor(QCursor(Qt.PointingHandCursor))
         self.setAlignment(Qt.AlignCenter)
+        self._corner_radius = 0
 
         self.HOVER_SCALE = 1.10
         self.PRESS_SCALE = 0.94
@@ -48,6 +49,10 @@ class ImageButton(QLabel):
         self.base_pixmap = pm
         self.update()
 
+    def set_corner_radius(self, radius: int):
+        self._corner_radius = max(0, int(radius))
+        self.update()
+
     def get_scale(self):
         return self._scale
 
@@ -63,6 +68,7 @@ class ImageButton(QLabel):
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.setRenderHint(QPainter.Antialiasing)
 
         m = self.contentsMargins()
         inner_w = self.width() - (m.left() + m.right())
@@ -75,6 +81,11 @@ class ImageButton(QLabel):
         scaled = self.base_pixmap.scaled(inner_w, inner_h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         x = m.left() + (inner_w - scaled.width()) // 2
         y = m.top() + (inner_h - scaled.height()) // 2
+
+        if self._corner_radius > 0:
+            path = QPainterPath()
+            path.addRoundedRect(float(x), float(y), float(scaled.width()), float(scaled.height()), float(self._corner_radius), float(self._corner_radius))
+            painter.setClipPath(path)
         painter.drawPixmap(x, y, scaled)
 
     def enterEvent(self, event):
