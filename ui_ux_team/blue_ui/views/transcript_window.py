@@ -11,13 +11,14 @@ class TranscriptWindowView(QWidget):
     record_clicked = Signal()
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        # Keep transcript as a separate top-level window (original py_learn behavior).
+        super().__init__()
         self.setWindowTitle("Transcript")
 
         layout = QVBoxLayout(self)
         top_box = QHBoxLayout()
 
-        record_button = ImageButton(resource_path("ui_ux_team/prototype_r/assets/record_black.png"), size=(65, 65))
+        record_button = ImageButton(resource_path("ui_ux_team/assets/record_black.png"), size=(65, 65))
         record_button.clicked.connect(self.record_clicked.emit)
 
         self.search_bar = SearchBar()

@@ -17,7 +17,7 @@ if __name__ == "__main__":
     window = QWidget()
     layout = QVBoxLayout(window)
 
-    btn = ImageButton(resource_path("ui_ux_team/prototype_r/assets/play.png"), size=(60, 60))
+    btn = ImageButton(resource_path("ui_ux_team/assets/play.png"), size=(60, 60))
     marquee = QueuedMarqueeLabel(["Preview mood A", "Preview mood B"], hold_ms=1200, fade_ms=150)
     text_box = TextBoxAI()
     text_box.append_message("system", "Widget preview mode")

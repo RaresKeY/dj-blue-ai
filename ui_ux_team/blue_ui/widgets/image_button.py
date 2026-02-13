@@ -5,8 +5,8 @@ from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve, Propert
 
 from architects.helpers.resource_path import resource_path
 
-BASE = resource_path("ui_ux_team/prototype_r")
-IMAGE_NOT_FOUND = os.path.join(BASE, "assets/image_not_found_white.png")
+BASE = resource_path("ui_ux_team/assets")
+IMAGE_NOT_FOUND = os.path.join(BASE, "image_not_found_white.png")
 
 
 class ImageButton(QLabel):
@@ -37,7 +37,9 @@ class ImageButton(QLabel):
     def set_image(self, path, fallback=IMAGE_NOT_FOUND):
         resolved = path
         if not os.path.isabs(resolved):
-            resolved = os.path.join(BASE, path)
+            if resolved.startswith("assets/"):
+                resolved = resolved.split("assets/", 1)[1]
+            resolved = os.path.join(BASE, resolved)
 
         pm = QPixmap(resolved)
         if pm.isNull():

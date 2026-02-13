@@ -69,8 +69,8 @@ class BlueBirdChatView(QWidget):
 
         self.text_box = TextBoxAI()
         self.input_field = InputBlueBird()
-        self.send_btn = ImageButton(resource_path("ui_ux_team/prototype_r/assets/send_black.png"), size=(63, 63))
-        self.load_transcript = ImageButton(resource_path("ui_ux_team/prototype_r/assets/load_transcript.png"), size=(40, 40))
+        self.send_btn = ImageButton(resource_path("ui_ux_team/assets/send_black.png"), size=(63, 63))
+        self.load_transcript = ImageButton(resource_path("ui_ux_team/assets/load_transcript.png"), size=(40, 40))
         self.loader = LoadingCircle(self)
 
         layout = QVBoxLayout(self)

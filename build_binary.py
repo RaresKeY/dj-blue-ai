@@ -38,10 +38,9 @@ def build():
     # Format: source:dest
     # We need to preserve the structure expected by resource_path
     
-    # ui_ux_team/prototype_r/assets -> ui_ux_team/prototype_r/assets
-    # Keep legacy asset destination for current resource_path usage.
-    assets_source = base_dir / "ui_ux_team" / "prototype_r" / "assets"
-    assets_dest = "ui_ux_team/prototype_r/assets"
+    # ui_ux_team/assets -> ui_ux_team/assets
+    assets_source = base_dir / "ui_ux_team" / "assets"
+    assets_dest = "ui_ux_team/assets"
     
     # mood_readers/data -> mood_readers/data
     mood_data_source = base_dir / "mood_readers" / "data"
