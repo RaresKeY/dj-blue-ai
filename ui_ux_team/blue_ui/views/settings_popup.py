@@ -12,9 +12,8 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QFrame,
     QSizeGrip,
-    QGraphicsDropShadowEffect,
 )
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtGui import QFont
 from ui_ux_team.blue_ui.theme import tokens
 
 ORANGE_SELECTION = "#FF8A3D"
@@ -127,17 +126,11 @@ class SettingsPopup(QWidget):
         self.setObjectName("SettingsPopup")
         self.setAttribute(Qt.WA_TranslucentBackground, False)
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setAutoFillBackground(True)
+        self.setAutoFillBackground(False)
 
         self.margin = margin
         self.setMinimumSize(560, 350)
         self.categories = categories or {}
-
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setBlurRadius(40)
-        self._shadow.setOffset(0, 10)
-        self._shadow.setColor(QColor(0, 0, 0, 190))
-        self.setGraphicsEffect(self._shadow)
 
         self.list = QListWidget()
         self.list.setFixedWidth(190)
@@ -190,7 +183,7 @@ class SettingsPopup(QWidget):
     def refresh_theme(self):
         panel_bg = getattr(tokens, "COLOR_SETTINGS_BG", tokens.COLOR_BG_MAIN)
         panel_border = _with_alpha(tokens.BORDER_SUBTLE, 1.0)
-        panel_outer = _with_alpha(tokens.PRIMARY, 0.48)
+        panel_outer = _with_alpha(tokens.BORDER_SUBTLE, 0.95)
         input_bg = _with_alpha(tokens.BG_INPUT, 1.0)
         input_focus_bg = _with_alpha(tokens.BG_INPUT, 1.0)
         nav_bg = _with_alpha(tokens.BG_INPUT, 0.94)
@@ -200,8 +193,8 @@ class SettingsPopup(QWidget):
             f"""
             QWidget#SettingsPopup {{
                 background-color: {panel_bg};
-                border: 2px solid {panel_outer};
-                border-radius: 16px;
+                border: 1px solid {panel_outer};
+                border-radius: 14px;
             }}
             QLineEdit {{
                 background: {input_bg};
@@ -217,8 +210,6 @@ class SettingsPopup(QWidget):
             }}
             """
         )
-        shadow_color = QColor(0, 0, 0, 165 if _is_light(panel_bg) else 200)
-        self._shadow.setColor(shadow_color)
         self.list.setStyleSheet(
             f"""
             QListWidget {{

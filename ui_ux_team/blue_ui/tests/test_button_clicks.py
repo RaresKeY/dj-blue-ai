@@ -1,5 +1,7 @@
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from PySide6.QtCore import Qt
@@ -47,6 +49,9 @@ class TestBlueUIButtonClicks(unittest.TestCase):
         patcher.start()
 
         self.window = MainUI()
+        self._tmp_music_dir = tempfile.TemporaryDirectory()
+        Path(self._tmp_music_dir.name, "test_track.wav").touch()
+        self.window._music_folder = Path(self._tmp_music_dir.name)
         self.window.show()
 
     def tearDown(self):
@@ -58,6 +63,7 @@ class TestBlueUIButtonClicks(unittest.TestCase):
             self.window._bluebird_chat.close()
         self.window._transcript_win.close()
         self.window.close()
+        self._tmp_music_dir.cleanup()
 
     def _click(self, widget):
         self.assertIsNotNone(widget)

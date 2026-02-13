@@ -54,6 +54,7 @@ T_CHUNK = 30
 
 class MainUI(QWidget):
     transcript_ready = Signal(dict)
+    _AUDIO_EXTS = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"}
 
     def __init__(self):
         super().__init__()
@@ -127,19 +128,15 @@ class MainUI(QWidget):
         real_path = self._resolve_music_path(music_path)
         if real_path is None:
             print(f"Music file not found for input: {music_path}")
+            self._play_btn.set_image("assets/play.png")
             return
 
         if self._player and self._currently_playing == music_path and self._player.is_playing():
             return
 
-        if self._player:
-            self._player.stop()
-
         self._currently_playing = music_path
-        self._play_btn.set_image("assets/pause.png")
-        self._player = MiniaudioPlayer(str(real_path))
-        self._player.set_volume(self._current_volume)
-        self._player.start()
+        started = self._start_player(real_path)
+        self._play_btn.set_image("assets/pause.png" if started else "assets/play.png")
 
     def _default_music_folder(self) -> Path:
         return default_music_folder()
@@ -158,14 +155,23 @@ class MainUI(QWidget):
 
     @staticmethod
     def _has_audio_files(folder: Path) -> bool:
-        exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"}
         try:
             for p in folder.iterdir():
-                if p.is_file() and p.suffix.lower() in exts:
+                if p.is_file() and p.suffix.lower() in MainUI._AUDIO_EXTS:
                     return True
         except Exception:
             return False
         return False
+
+    def _first_audio_file(self, folder: Path) -> Path | None:
+        try:
+            files = sorted(
+                [p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in self._AUDIO_EXTS],
+                key=lambda p: p.name.lower(),
+            )
+            return files[0] if files else None
+        except Exception:
+            return None
 
     def _notify_if_music_folder_empty(self):
         if self._has_audio_files(self._music_folder):
@@ -235,7 +241,7 @@ class MainUI(QWidget):
         )
         popup.finished.connect(lambda *_: setattr(self, "_music_empty_popup", None))
         self._music_empty_popup = popup
-        popup.exec()
+        popup.open()
 
     def _resolve_music_path(self, music_path: str | Path) -> Path | None:
         raw = str(music_path or "").strip()
@@ -260,8 +266,26 @@ class MainUI(QWidget):
         for p in probes:
             if p.exists():
                 return p
-        # Keep runtime resilient even when files are missing at dev/test time.
-        return probes[2] if len(probes) > 2 else probes[0]
+        # If requested track is missing, fall back to first available track in configured folder.
+        return self._first_audio_file(self._music_folder)
+
+    def _start_player(self, real_path: Path) -> bool:
+        if self._player:
+            try:
+                self._player.stop()
+            except Exception:
+                pass
+            self._player = None
+
+        player = MiniaudioPlayer(str(real_path))
+        player.set_volume(self._current_volume)
+        started = player.start()
+        # Support both explicit bool-return players and legacy implementations.
+        ok = (started is not False) and bool(player.is_playing())
+        if not ok:
+            return False
+        self._player = player
+        return True
 
     def handle_transcript_data(self, data: dict):
         text = TranscriptionManager.format_transcript_text(data)
@@ -614,11 +638,12 @@ class MainUI(QWidget):
             real_path = self._resolve_music_path(file_path)
             if real_path is None:
                 print(f"Music file not found for input: {file_path}")
+                self._play_btn.set_image("assets/play.png")
+                return
+            if not self._start_player(real_path):
+                self._play_btn.set_image("assets/play.png")
                 return
             self._play_btn.set_image("assets/pause.png")
-            self._player = MiniaudioPlayer(str(real_path))
-            self._player.set_volume(self._current_volume)
-            self._player.start()
             if self._timeline is not None:
                 duration = self._player.duration_seconds() if hasattr(self._player, "duration_seconds") else 0.0
                 position = self._player.position_seconds() if hasattr(self._player, "position_seconds") else 0.0
@@ -627,7 +652,11 @@ class MainUI(QWidget):
             return
 
         if self._player.paused:
-            self._player.start()
+            resumed = self._player.start()
+            if resumed is False:
+                self._play_btn.set_image("assets/play.png")
+                self._player = None
+                return
             self._play_btn.set_image("assets/pause.png")
         else:
             self._player.pause()

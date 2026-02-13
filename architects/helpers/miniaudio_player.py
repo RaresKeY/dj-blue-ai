@@ -33,13 +33,13 @@ class MiniaudioPlayer:
         """Starts or resumes playback."""
         if self._running and self._paused:
                 self.resume()
-                return
+                return True
 
         self.stop() # Ensure clean state
 
         if not os.path.exists(self.file_path):
             print(f"MiniaudioPlayer: File not found {self.file_path}")
-            return
+            return False
 
         try:
             self._build_stream(seek_frame=0)
@@ -48,9 +48,11 @@ class MiniaudioPlayer:
             self._running = True
             self._paused = False
             print(f"MiniaudioPlayer: Playing {self.file_path} at volume {self._volume}")
+            return True
         except Exception as e:
             print(f"MiniaudioPlayer Error: {e}")
             self._running = False
+            return False
 
     def _build_stream(self, seek_frame: int):
         raw_stream = miniaudio.stream_file(
