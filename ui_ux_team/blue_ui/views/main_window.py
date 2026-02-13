@@ -732,7 +732,18 @@ class MainUI(QWidget):
                 self._timeline.set_position(self._timeline_dummy_position)
             return
         if hasattr(self._player, "seek"):
-            self._player.seek(target_seconds)
+            was_playing = self._player.is_playing() if hasattr(self._player, "is_playing") else False
+            seek_ok = self._player.seek(target_seconds)
+            if seek_ok is False:
+                self._play_btn.set_image("assets/play.png")
+                self._player = None
+                return
+            if was_playing and hasattr(self._player, "is_playing") and not self._player.is_playing():
+                resumed = self._player.start()
+                if resumed is False or not self._player.is_playing():
+                    self._play_btn.set_image("assets/play.png")
+                    self._player = None
+                    return
         if self._timeline is not None:
             position = self._player.position_seconds() if hasattr(self._player, "position_seconds") else target_seconds
             self._timeline.set_position(position)

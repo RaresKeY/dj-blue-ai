@@ -10,6 +10,20 @@ Investigated `MiniaudioPlayer` + `MainUI` playback integration for startup/play/
 
 ## Issues Found
 
+0. Callback frame-size mismatch (primary runtime bug)
+- `PlaybackDevice` sends requested frame counts to callback generator.
+- Previous player code ignored these requests and iterated decoder with fixed default chunk size (`1024`).
+- This can exceed callback max frames and break/stop playback callback flow.
+- Symptom pattern:
+  - console prints \"Playing ...\"\n
+  - no audible output\n
+  - timeline position remains static
+
+0b. Silent `NULL` backend fallback
+- miniaudio can initialize `PlaybackDevice` with backend `null` if no usable backend is found.
+- If not explicitly rejected, app may report \"playing\" while producing no sound.
+- This reproduces a \"playing log + static timeline + silence\" profile in device/backend failure cases.
+
 1. Silent-start failure left UI in incorrect state
 - `MainUI` set play icon to pause before start success was confirmed.
 - On missing/invalid files, player object could be created but not actually playing.
@@ -27,6 +41,19 @@ Investigated `MiniaudioPlayer` + `MainUI` playback integration for startup/play/
 - Subsequent clicks could hit pause/resume branches instead of clean restart.
 
 ## Fixes Implemented
+
+0. Callback-correct stream generation
+- Updated `_volume_generator` to honor `required_frames` sent by miniaudio callback.
+- Uses `stream.send(required_frames)` instead of fixed-size `next(stream)` reads.
+- Keeps volume scaling while guaranteeing frame-sized callback compatibility.
+
+0b. Backend enforcement
+- `MiniaudioPlayer` now requests preferred OS backends explicitly:
+  - Linux: PulseAudio -> ALSA -> JACK
+  - macOS: CoreAudio
+  - Windows: WASAPI -> DSOUND -> WINMM
+- If backend resolves to `null`, startup fails with explicit error instead of fake success.
+- Playback log now includes selected backend for quick diagnosis.
 
 1. Explicit start success/failure contract
 - `MiniaudioPlayer.start()` now returns `True` on success and `False` on failure.

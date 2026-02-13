@@ -1,7 +1,7 @@
 import re
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSlider, QStyle, QStyleOptionSlider, QVBoxLayout, QWidget
 
 from ui_ux_team.blue_ui.theme import tokens
 
@@ -36,14 +36,25 @@ class PreciseSeekSlider(QSlider):
         super().__init__(orientation, parent)
         self.setMouseTracking(True)
 
+    def _groove_rect(self):
+        opt = QStyleOptionSlider()
+        self.initStyleOption(opt)
+        groove = self.style().subControlRect(QStyle.CC_Slider, opt, QStyle.SC_SliderGroove, self)
+        if groove.isNull() or groove.width() <= 0:
+            return self.rect()
+        return groove
+
     def _value_from_x(self, x: float) -> int:
-        width = max(1, self.width())
-        ratio = max(0.0, min(1.0, x / width))
-        return int(round(ratio * self.maximum()))
+        groove = self._groove_rect()
+        span = max(1, groove.width() - 1)
+        pos = int(max(0, min(span, round(x - groove.left()))))
+        return QStyle.sliderValueFromPosition(self.minimum(), self.maximum(), pos, span, upsideDown=False)
 
     def _ratio_from_x(self, x: float) -> float:
-        width = max(1, self.width())
-        return max(0.0, min(1.0, x / width))
+        groove = self._groove_rect()
+        span = max(1, groove.width() - 1)
+        pos = max(0.0, min(float(span), float(x - groove.left())))
+        return pos / float(span)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -251,17 +262,21 @@ class PlaybackTimeline(QWidget):
         self._update_visual_layers()
 
     def _update_visual_layers(self):
-        w = max(1, self.slider.width())
+        groove = self.slider._groove_rect()
+        groove_left = groove.left()
+        groove_w = max(1, groove.width())
+        groove_span = max(1, groove_w - 1)
         h = self.slider.height()
         max_val = max(1, self.slider.maximum())
         actual_ratio = self.slider.value() / max_val
-        actual_x = int(actual_ratio * w)
+        actual_x = groove_left + int(actual_ratio * groove_span)
         groove_y = (h - self._groove_h) // 2
 
         # Handle appears only while hovered or dragging.
         show_handle = self._hovered or self._is_dragging
         if show_handle:
-            hx = max(0, min(w - self._actual_handle.width(), actual_x - self._actual_handle.width() // 2))
+            slider_w = max(1, self.slider.width())
+            hx = max(0, min(slider_w - self._actual_handle.width(), actual_x - self._actual_handle.width() // 2))
             hy = (h - self._actual_handle.height()) // 2
             self._actual_handle.move(hx, hy)
             self._actual_handle.show()
@@ -269,14 +284,15 @@ class PlaybackTimeline(QWidget):
             self._actual_handle.hide()
 
         if self._hover_preview_active and not self._is_dragging:
-            preview_x = int(self._hover_ratio * w)
-            marker_x = max(0, min(w - self._hover_marker.width(), preview_x - self._hover_marker.width() // 2))
+            preview_x = groove_left + int(self._hover_ratio * groove_span)
+            slider_w = max(1, self.slider.width())
+            marker_x = max(0, min(slider_w - self._hover_marker.width(), preview_x - self._hover_marker.width() // 2))
             marker_y = (h - self._hover_marker.height()) // 2
             self._hover_marker.move(marker_x, marker_y)
             self._hover_marker.show()
 
-            fill_w = max(0, min(w, preview_x))
-            self._preview_fill.setGeometry(0, groove_y, fill_w, self._groove_h)
+            fill_w = max(0, min(groove_w, preview_x - groove_left))
+            self._preview_fill.setGeometry(groove_left, groove_y, fill_w, self._groove_h)
             self._preview_fill.show()
         else:
             self._hover_marker.hide()
