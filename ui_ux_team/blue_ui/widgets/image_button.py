@@ -1,0 +1,104 @@
+import os
+from PySide6.QtWidgets import QLabel
+from PySide6.QtGui import QPixmap, QCursor, QPainter
+from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve, Property
+
+from architects.helpers.resource_path import resource_path
+
+BASE = resource_path("ui_ux_team/prototype_r")
+IMAGE_NOT_FOUND = os.path.join(BASE, "assets/image_not_found_white.png")
+
+
+class ImageButton(QLabel):
+    clicked = Signal()
+
+    def __init__(self, path, size=(40, 40), fallback=None):
+        super().__init__()
+        self.setFixedSize(*size)
+        self.setCursor(QCursor(Qt.PointingHandCursor))
+        self.setAlignment(Qt.AlignCenter)
+
+        self.HOVER_SCALE = 1.10
+        self.PRESS_SCALE = 0.94
+        margin_factor = 0.06
+
+        margins = [max(size[0], size[1]) * margin_factor] * 4
+        self.setContentsMargins(*margins)
+
+        self.base_pixmap = QPixmap(path)
+        if self.base_pixmap.isNull() and fallback:
+            self.base_pixmap = QPixmap(fallback)
+
+        self._scale = 1.0
+        self.anim = QPropertyAnimation(self, b"scale_factor", self)
+        self.anim.setDuration(120)
+        self.anim.setEasingCurve(QEasingCurve.OutQuad)
+
+    def set_image(self, path, fallback=IMAGE_NOT_FOUND):
+        resolved = path
+        if not os.path.isabs(resolved):
+            resolved = os.path.join(BASE, path)
+
+        pm = QPixmap(resolved)
+        if pm.isNull():
+            pm = QPixmap(fallback or IMAGE_NOT_FOUND)
+
+        self.base_pixmap = pm
+        self.update()
+
+    def get_scale(self):
+        return self._scale
+
+    def set_scale(self, value):
+        self._scale = value
+        self.update()
+
+    scale_factor = Property(float, get_scale, set_scale)
+
+    def paintEvent(self, event):
+        if self.base_pixmap.isNull():
+            return super().paintEvent(event)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        m = self.contentsMargins()
+        inner_w = self.width() - (m.left() + m.right())
+        inner_h = self.height() - (m.top() + m.bottom())
+
+        painter.translate(self.width() / 2, self.height() / 2)
+        painter.scale(self._scale, self._scale)
+        painter.translate(-self.width() / 2, -self.height() / 2)
+
+        scaled = self.base_pixmap.scaled(inner_w, inner_h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        x = m.left() + (inner_w - scaled.width()) // 2
+        y = m.top() + (inner_h - scaled.height()) // 2
+        painter.drawPixmap(x, y, scaled)
+
+    def enterEvent(self, event):
+        self.animate_to(self.HOVER_SCALE)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.animate_to(1.00)
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.animate_to(self.PRESS_SCALE, fast=True)
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            inside = self.rect().contains(event.position().toPoint())
+            self.animate_to(self.HOVER_SCALE if inside else 1.00)
+            if inside:
+                self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+    def animate_to(self, value, fast=False):
+        self.anim.stop()
+        self.anim.setDuration(80 if fast else 140)
+        self.anim.setStartValue(self._scale)
+        self.anim.setEndValue(value)
+        self.anim.start()
