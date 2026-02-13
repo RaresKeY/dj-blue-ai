@@ -4,7 +4,7 @@ import random
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QPoint
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPalette, QColor, QPixmap, QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -27,7 +27,7 @@ from ui_ux_team.blue_ui.views.transcript_window import TranscriptWindowView
 from ui_ux_team.blue_ui.widgets.image_button import ImageButton, IMAGE_NOT_FOUND
 from ui_ux_team.blue_ui.widgets.marquee import QueuedMarqueeLabel
 from ui_ux_team.blue_ui.widgets.toast import FloatingToast
-from ui_ux_team.blue_ui.widgets.volume import VolumeButton, VolumePopup
+from ui_ux_team.blue_ui.widgets.volume import IntegratedVolumeControl
 
 
 def get_project_root() -> Path:
@@ -43,7 +43,7 @@ COLOR_TIMELINE_BG = "#2A2A2A"
 COLOR_BOTTOM_BG = "#1E1E1E"
 COLOR_CONTROLS_BG = "#1E1E1E"
 
-BASE = resource_path("ui_ux_team/prototype_r")
+BASE = resource_path("ui_ux_team/assets")
 T_CHUNK = 30
 
 
@@ -76,7 +76,7 @@ class MainUI(QWidget):
         with open(mood_data_path, "r", encoding="utf-8") as f:
             self.mood_map = json.load(f)
 
-        self._transcript_win = TranscriptWindowView(parent=self)
+        self._transcript_win = TranscriptWindowView()
         self._transcript_win.closed.connect(lambda: setattr(self, "_show_transcript_window", False))
         self._transcript_win.record_clicked.connect(self.record_transcript)
         self._show_transcript_window = False
@@ -89,7 +89,7 @@ class MainUI(QWidget):
         self._bluebird_chat = None
         self._settings_menu = None
         self._meet_type = None
-        self._volume_popup = None
+        self._volume_control = None
 
         api_key = self.load_api_key()
         if api_key:
@@ -102,7 +102,7 @@ class MainUI(QWidget):
         clean_path = music_path[2:] if music_path.startswith("./") else music_path
         real_path = Path(resource_path(clean_path))
         if not real_path.exists():
-            real_path = Path(resource_path(os.path.join("ui_ux_team/prototype_r", clean_path)))
+            real_path = Path(resource_path(os.path.join("ui_ux_team/assets", clean_path)))
         if not real_path.exists():
             print(f"Music file not found: {real_path}")
             return
@@ -172,7 +172,7 @@ class MainUI(QWidget):
                 music_path = random.choice(music_data)
 
         if not music_path and (self._player is None or not self._player.is_playing()):
-            music_path = "ui_ux_team/prototype_r/deep_purple_smoke_on_the_water.wav"
+            music_path = "ui_ux_team/assets/deep_purple_smoke_on_the_water.wav"
 
         if music_path:
             self.basic_music_play(music_path)
@@ -341,6 +341,9 @@ class MainUI(QWidget):
         timeline_box.setFixedHeight(15)
         return timeline_box
 
+    def build_timeline_volume_section(self):
+        return self.build_main_timeline()
+
     def play_click(self, file_path=None):
         file_path = file_path or self._currently_playing
 
@@ -349,7 +352,7 @@ class MainUI(QWidget):
             clean_path = file_path[2:] if file_path.startswith("./") else file_path
             real_path = Path(resource_path(clean_path))
             if not real_path.exists():
-                real_path = Path(resource_path(os.path.join("ui_ux_team/prototype_r", clean_path)))
+                real_path = Path(resource_path(os.path.join("ui_ux_team/assets", clean_path)))
 
             self._player = MiniaudioPlayer(str(real_path))
             self._player.set_volume(self._current_volume)
@@ -400,41 +403,7 @@ class MainUI(QWidget):
     def build_blue_bird(self):
         blue_bird = self.button("assets/blue_bird.png", size=(70, 70))
         blue_bird.clicked.connect(self.open_bluebird_chat)
-        right_spacer = QWidget()
-        right_spacer.setFixedSize(70, 70)
-        return blue_bird, right_spacer
-
-    def on_volume_start(self):
-        button = self.sender()
-        if not button:
-            return
-
-        current_vol = self._player._volume if self._player else 1.0
-
-        if not self._volume_popup:
-            self._volume_popup = VolumePopup(parent=button, current_volume=current_vol)
-            self._volume_popup.volume_changed.connect(self.set_volume)
-            self._volume_popup.closed.connect(lambda: setattr(self, "_volume_popup", None))
-
-        self._volume_popup.show()
-        popup_w = self._volume_popup.width()
-        popup_h = self._volume_popup.height()
-        local_offset = QPoint((button.width() - popup_w) // 2 + button.width() // 2, -popup_h - 10)
-        self._volume_popup.move(button.mapToGlobal(local_offset))
-
-    def on_volume_move(self, global_pos):
-        if self._volume_popup and self._volume_popup.isVisible():
-            slider = self._volume_popup.slider
-            local_pos = slider.mapFromGlobal(global_pos)
-            h = slider.height()
-            y = max(0, min(h, local_pos.y()))
-            ratio = 1.0 - (y / h) if h > 0 else 0.0
-            slider.setValue(int(ratio * slider.maximum()))
-
-    def on_volume_end(self):
-        if self._volume_popup:
-            self._volume_popup.close()
-            self._volume_popup = None
+        return blue_bird
 
     def set_volume(self, volume):
         self._current_volume = volume
@@ -443,27 +412,50 @@ class MainUI(QWidget):
 
     def build_main_bottom_panel(self):
         bottom_con = self.color_box(COLOR_BOTTOM_BG)
-        bottom_layout = QHBoxLayout()
+        bottom_layout = QVBoxLayout()
+        bottom_layout.setContentsMargins(10, 10, 10, 10)
+        bottom_layout.setSpacing(4)
         bottom_con.setLayout(bottom_layout)
 
-        blue_bird, _ = self.build_blue_bird()
-
-        volume_control = VolumeButton(path=MainUI.build_path("assets/volume_button.png"), size=(42, 42), fallback=IMAGE_NOT_FOUND)
-        volume_control.interaction_start.connect(self.on_volume_start)
-        volume_control.interaction_move.connect(self.on_volume_move)
-        volume_control.interaction_end.connect(self.on_volume_end)
-
-        right_spacer = QWidget()
-        right_spacer.setFixedSize(70, 70)
-        right_layout = QHBoxLayout(right_spacer)
-        right_layout.setContentsMargins(5, 5, 5, 5)
-        right_layout.addWidget(volume_control, alignment=Qt.AlignTop | Qt.AlignRight)
-
         controls = self.build_main_controls()
+        controls.setFixedHeight(100)
 
-        bottom_layout.addWidget(blue_bird, alignment=Qt.AlignBottom)
-        bottom_layout.addWidget(controls, alignment=Qt.AlignHCenter | Qt.AlignTop)
-        bottom_layout.addWidget(right_spacer, alignment=Qt.AlignTop)
+        # Top row: controls centered, volume on the right, aligned to top.
+        slot_width = 180
+        slot_height = 100
+
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(0)
+
+        left_placeholder = QWidget()
+        left_placeholder.setFixedSize(slot_width, slot_height)
+
+        self._volume_control = IntegratedVolumeControl(initial_volume=self._current_volume)
+        self._volume_control.volume_changed.connect(self.set_volume)
+
+        volume_slot = QWidget()
+        volume_slot.setFixedSize(slot_width, slot_height)
+        volume_layout = QHBoxLayout(volume_slot)
+        volume_layout.setContentsMargins(0, 0, 0, 0)
+        volume_layout.addWidget(self._volume_control, alignment=Qt.AlignLeft | Qt.AlignTop)
+
+        # Deterministic order: [spacer][controls][volume]
+        top_row.addWidget(left_placeholder, alignment=Qt.AlignTop)
+        top_row.addWidget(controls, alignment=Qt.AlignTop)
+        top_row.addWidget(volume_slot, alignment=Qt.AlignTop)
+
+        # Bottom row: bird anchored bottom-left as its own layout.
+        bottom_row = QHBoxLayout()
+        bottom_row.setContentsMargins(0, 0, 0, 0)
+        bottom_row.setSpacing(0)
+
+        blue_bird = self.build_blue_bird()
+        bottom_row.addWidget(blue_bird, alignment=Qt.AlignLeft | Qt.AlignBottom)
+        bottom_row.addStretch(1)
+
+        bottom_layout.addLayout(top_row, 1)
+        bottom_layout.addLayout(bottom_row, 0)
 
         return bottom_con
 
@@ -490,7 +482,7 @@ class MainUI(QWidget):
 
         layout.addWidget(self.mood_tag)
         layout.addWidget(self.build_cover_images(), alignment=Qt.AlignCenter | Qt.AlignBottom)
-        layout.addWidget(self.build_main_timeline())
+        layout.addWidget(self.build_timeline_volume_section())
         layout.addWidget(self.build_main_bottom_panel())
 
         main_box = self.color_box(COLOR_BG_MAIN)
@@ -508,6 +500,8 @@ class MainUI(QWidget):
 
     @staticmethod
     def build_path(file_path):
+        if file_path.startswith("assets/"):
+            file_path = file_path.split("assets/", 1)[1]
         return os.path.join(BASE, file_path)
 
     @staticmethod
