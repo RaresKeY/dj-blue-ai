@@ -94,6 +94,8 @@ class MainUI(QWidget):
         self._music_folder = self._load_music_folder_setting()
         self._music_path_edit = None
         self._music_empty_popup = None
+        self._startup_preflight_shown = False
+        self._startup_cycle_popup = None
 
         self.root = QVBoxLayout(self)
         self.root.setContentsMargins(0, 0, 0, 0)
@@ -101,7 +103,6 @@ class MainUI(QWidget):
 
         self.man_mem = ManagedMem()
         self._music_folder.mkdir(parents=True, exist_ok=True)
-        QTimer.singleShot(350, self._notify_if_music_folder_empty)
 
         mood_data_path = resource_path("mood_readers/data/mood_playlists_organized.json")
         with open(mood_data_path, "r", encoding="utf-8") as f:
@@ -123,6 +124,7 @@ class MainUI(QWidget):
             self.transcription_manager.set_callback(self.transcript_ready.emit)
         else:
             print("Missing API Key, TranscriptionManager not initialized")
+        QTimer.singleShot(600, self._show_start_cycle_popup_once)
 
     def basic_music_play(self, music_path):
         real_path = self._resolve_music_path(music_path)
@@ -172,6 +174,174 @@ class MainUI(QWidget):
             return files[0] if files else None
         except Exception:
             return None
+
+    def _required_playlist_filenames(self) -> set[str]:
+        required: set[str] = set()
+        mood_map = getattr(self, "mood_map", None)
+        if not isinstance(mood_map, dict):
+            return required
+        for tracks in mood_map.values():
+            if not isinstance(tracks, list):
+                continue
+            for track in tracks:
+                raw = str(track or "").strip()
+                if not raw:
+                    continue
+                clean = raw[2:] if raw.startswith("./") else raw
+                name = Path(clean).name
+                if name:
+                    required.add(name)
+        return required
+
+    def _music_collection_filenames(self) -> set[str]:
+        names: set[str] = set()
+        try:
+            for p in self._music_folder.iterdir():
+                if p.is_file() and p.suffix.lower() in self._AUDIO_EXTS:
+                    names.add(p.name)
+        except Exception:
+            return set()
+        return names
+
+    def _missing_playlist_files(self) -> list[str]:
+        required = self._required_playlist_filenames()
+        if not required:
+            return []
+        available = self._music_collection_filenames()
+        return sorted(required - available, key=str.lower)
+
+    def _show_start_cycle_popup_once(self):
+        if self._startup_preflight_shown:
+            return
+        self._startup_preflight_shown = True
+        if os.environ.get("QT_QPA_PLATFORM", "").lower() == "offscreen":
+            return
+        self._show_start_cycle_popup()
+
+    def _show_start_cycle_popup(self):
+        if self._startup_cycle_popup is not None and self._startup_cycle_popup.isVisible():
+            self._startup_cycle_popup.raise_()
+            self._startup_cycle_popup.activateWindow()
+            return
+
+        api_ok = self.transcription_manager is not None
+        music_non_empty = self._has_audio_files(self._music_folder)
+        missing_playlist_files = self._missing_playlist_files()
+        playlist_match_ok = len(missing_playlist_files) == 0
+        can_start_cycle = api_ok and music_non_empty and playlist_match_ok
+
+        popup = QDialog(self)
+        popup.setWindowTitle("Start Recording/Playback Cycle")
+        popup.setModal(True)
+        popup.setMinimumWidth(680)
+
+        root = QVBoxLayout(popup)
+        root.setContentsMargins(16, 14, 16, 14)
+        root.setSpacing(10)
+
+        title = QLabel("Start recording/playback cycle?")
+        title.setStyleSheet(f"color: {theme_tokens.TEXT_PRIMARY}; font-size: 18px; font-weight: 700;")
+        intro = QLabel(
+            "The app requires API key, non-empty music collection, and full playlist file match "
+            "with mood_readers/data/mood_playlists_organized.json."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet(f"color: {theme_tokens.TEXT_MUTED}; font-size: 13px;")
+
+        status_lines = []
+        status_lines.append(f"{'OK' if api_ok else 'WARN'}: API key configured")
+        status_lines.append(f"{'OK' if music_non_empty else 'WARN'}: Music collection has audio files")
+        status_lines.append(
+            f"{'OK' if playlist_match_ok else 'WARN'}: Music collection matches mood_playlists_organized.json"
+        )
+        status_label = QLabel("\n".join(status_lines))
+        status_label.setWordWrap(True)
+        status_label.setStyleSheet(
+            f"""
+            color: {theme_tokens.TEXT_PRIMARY};
+            font-size: 13px;
+            background: rgba(13, 19, 32, 0.35);
+            border: 1px solid {theme_tokens.BORDER_SUBTLE};
+            border-radius: 10px;
+            padding: 10px;
+            """
+        )
+
+        detail_lines: list[str] = []
+        if not api_ok:
+            detail_lines.append("- Missing AI_STUDIO_API_KEY (keyring/.env).")
+        if not music_non_empty:
+            detail_lines.append(f"- Music folder is empty: {self._music_folder}")
+        if not playlist_match_ok:
+            sample = ", ".join(missing_playlist_files[:8])
+            remaining = len(missing_playlist_files) - min(8, len(missing_playlist_files))
+            suffix = f" (+{remaining} more)" if remaining > 0 else ""
+            detail_lines.append(
+                f"- Missing {len(missing_playlist_files)} required playlist file(s): {sample}{suffix}"
+            )
+
+        details = QLabel("\n".join(detail_lines) if detail_lines else "All requirements are satisfied.")
+        details.setWordWrap(True)
+        details.setStyleSheet(f"color: {theme_tokens.TEXT_MUTED}; font-size: 13px;")
+
+        start_btn = QPushButton("Start cycle")
+        start_btn.setEnabled(can_start_cycle)
+        if not can_start_cycle:
+            start_btn.setToolTip("Fix warnings before starting cycle.")
+        start_btn.clicked.connect(lambda: (popup.accept(), self._start_record_playback_cycle()))
+
+        settings_btn = QPushButton("Open Settings")
+        settings_btn.clicked.connect(lambda: (popup.accept(), self.settings_menu()))
+
+        later_btn = QPushButton("Not now")
+        later_btn.clicked.connect(popup.reject)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        buttons.addWidget(settings_btn)
+        buttons.addWidget(later_btn)
+        buttons.addWidget(start_btn)
+
+        root.addWidget(title)
+        root.addWidget(intro)
+        root.addWidget(status_label)
+        root.addWidget(details)
+        root.addLayout(buttons)
+
+        popup.setStyleSheet(
+            f"""
+            QDialog {{
+                background: {theme_tokens.COLOR_BG_MAIN};
+                border: 1px solid {theme_tokens.BORDER_SUBTLE};
+                border-radius: 12px;
+            }}
+            QPushButton {{
+                background: rgba(255, 138, 61, 0.14);
+                color: #FF8A3D;
+                border: 1px solid rgba(255, 138, 61, 0.62);
+                border-radius: 8px;
+                padding: 8px 14px;
+                font-weight: 600;
+                min-width: 110px;
+            }}
+            QPushButton:hover {{
+                background: rgba(255, 138, 61, 0.22);
+            }}
+            QPushButton:disabled {{
+                background: rgba(255, 138, 61, 0.08);
+                color: rgba(255, 138, 61, 0.45);
+                border: 1px solid rgba(255, 138, 61, 0.24);
+            }}
+            """
+        )
+        popup.finished.connect(lambda *_: setattr(self, "_startup_cycle_popup", None))
+        self._startup_cycle_popup = popup
+        popup.open()
+
+    def _start_record_playback_cycle(self):
+        if not self._show_transcript_window:
+            self.open_transcript()
+        self.record_transcript()
 
     def _notify_if_music_folder_empty(self):
         if self._has_audio_files(self._music_folder):
