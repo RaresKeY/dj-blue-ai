@@ -30,11 +30,12 @@ If `music_collection/` has no audio files, the UI shows a Music Library popup.
 - [What Is Active vs Legacy](#what-is-active-vs-legacy)
 - [Basic Usage](#basic-usage)
 - [Project Structure](#project-structure)
+- [Runtime Dependencies](#runtime-dependencies)
 - [Configuration and Persistence](#configuration-and-persistence)
 - [Preview Components](#preview-components)
 - [Testing](#testing)
 - [Build and Release](#build-and-release)
-- [Architecture and UI Docs](#architecture-and-ui-docs)
+- [Blue UI Docs](#blue-ui-docs)
 - [Troubleshooting](#troubleshooting)
 
 ## What Is Active vs Legacy
@@ -63,8 +64,19 @@ python ui_ux_team/blue_ui/app/main.py
 - `ui_ux_team/blue_ui/widgets/`: timeline, volume, carousel, buttons, text widgets, toast.
 - `ui_ux_team/blue_ui/theme/`: theme palettes, tokens, manager.
 - `ui_ux_team/blue_ui/config/`: runtime path policy and unified settings store.
-- `architects/helpers/`: shared backend helpers (audio, transcription, memory, LLM utilities).
+- `ui_ux_team/assets/`: icons, covers, and UI image assets used at runtime.
 - `.github/workflows/build.yml`: tag-triggered CI build and GitHub release flow.
+
+## Runtime Dependencies
+These backend modules are currently used by `ui_ux_team/blue_ui/app/main.py` and its imports:
+- `architects/helpers/miniaudio_player.py`
+- `architects/helpers/transcription_manager.py`
+- `architects/helpers/managed_mem.py`
+- `architects/helpers/resource_path.py`
+- `architects/helpers/tabs_audio.py`
+- `architects/helpers/gemini_chatbot.py`
+- `architects/helpers/api_utils.py`
+- `mood_readers/data/mood_playlists_organized.json`
 
 ## Configuration and Persistence
 - Unified config file: `config/app_config.json`
@@ -122,18 +134,7 @@ git tag -s v0.2.1-alpha -m "v0.2.1-alpha"
 git push origin v0.2.1-alpha
 ```
 
-## Architecture and UI Docs
-Core architecture docs:
-- `architects/design_docs/team_onboarding.md` (setup and first contribution paths)
-- `architects/design_docs/py_learn_flow.md` (end-to-end flow and system observations)
-- `architects/design_docs/component_main_ui.md` (main app-shell behavior)
-- `architects/design_docs/component_audio_pipeline.md` (capture/playback pipeline)
-- `architects/design_docs/component_llm_utility_suite.md` (Gemini wrapper API)
-- `architects/design_docs/component_managed_mem.md` (state persistence helper)
-- `architects/design_docs/component_ui_widgets.md` (widget roles and usage)
-- `architects/design_docs/audio_components.md` (audio stack map)
-
-Blue UI docs:
+## Blue UI Docs
 - `ui_ux_team/blue_ui/docs/ui_complete_reference.md` (full layout/widget behavior reference)
 - `ui_ux_team/blue_ui/docs/component_split_plan.md` (module split and composition direction)
 - `ui_ux_team/blue_ui/docs/theme_system.md` and `ui_ux_team/blue_ui/docs/theme_templates.md` (theme model + palette set)
@@ -142,6 +143,8 @@ Blue UI docs:
 - `ui_ux_team/blue_ui/docs/config_persistence_binary_report.md` (runtime config behavior in source/binary)
 - `ui_ux_team/blue_ui/docs/miniplayer_playback_investigation.md` (playback fixes and rationale)
 - `ui_ux_team/blue_ui/docs/button_functionality_audit.md` (legacy vs current control mapping)
+
+Legacy and historical architecture notes remain in `architects/design_docs/` and are not the primary runtime reference for Blue UI.
 
 ## Troubleshooting
 1. No audio but playback log appears:
