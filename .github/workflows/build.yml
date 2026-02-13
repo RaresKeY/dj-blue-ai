@@ -71,13 +71,19 @@ jobs:
     - name: Fix Permissions
       run: chmod +x artifacts/dj-blue-ai-Linux/dj-blue-ai
 
+    - name: Prepare Release Files
+      run: |
+        cp artifacts/dj-blue-ai-Linux/dj-blue-ai artifacts/dj-blue-ai-linux
+        cp artifacts/dj-blue-ai-macOS/dj-blue-ai artifacts/dj-blue-ai-macos
+        cp artifacts/dj-blue-ai-Windows/dj-blue-ai.exe artifacts/dj-blue-ai-windows.exe
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          artifacts/dj-blue-ai-Linux/dj-blue-ai
-          artifacts/dj-blue-ai-macOS/dj-blue-ai
-          artifacts/dj-blue-ai-Windows/dj-blue-ai.exe
+          artifacts/dj-blue-ai-linux
+          artifacts/dj-blue-ai-macos
+          artifacts/dj-blue-ai-windows.exe
         draft: false
         prerelease: false
         generate_release_notes: true
