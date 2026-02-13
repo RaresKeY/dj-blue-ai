@@ -1457,7 +1457,10 @@ class MainUI(QWidget):
     @staticmethod
     def load_api_key():
         # settings runs hybrid keyring then .env loadenv flow
-        import settings
+        try:
+            from ui_ux_team.prototype_r import settings  # noqa: F401
+        except ImportError:
+            import settings  # type: ignore  # noqa: F401
         # load_dotenv()
         # os.environ["AI_STUDIO_API_KEY"] = os.getenv("AI_STUDIO_API_KEY", "")
         api_key = os.getenv("AI_STUDIO_API_KEY")
