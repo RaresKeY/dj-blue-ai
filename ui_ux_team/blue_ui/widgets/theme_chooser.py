@@ -5,6 +5,22 @@ from ui_ux_team.blue_ui.theme import current_theme_key, list_themes, set_theme, 
 from ui_ux_team.blue_ui.theme import tokens
 
 
+def _with_alpha(color: str, alpha: float) -> str:
+    c = (color or "").strip()
+    a = max(0.0, min(1.0, float(alpha)))
+    if c.startswith("#") and len(c) in (4, 7):
+        if len(c) == 4:
+            r = int(c[1] * 2, 16)
+            g = int(c[2] * 2, 16)
+            b = int(c[3] * 2, 16)
+        else:
+            r = int(c[1:3], 16)
+            g = int(c[3:5], 16)
+            b = int(c[5:7], 16)
+        return f"rgba({r}, {g}, {b}, {a:.3f})"
+    return c
+
+
 class ThemeChooserMenu(QWidget):
     theme_selected = Signal(str)
 
@@ -39,10 +55,15 @@ class ThemeChooserMenu(QWidget):
         self.theme_selected.emit(theme_key)
 
     def refresh_theme(self):
+        button_bg = _with_alpha(tokens.BG_INPUT, 1.0)
+        menu_bg = _with_alpha(tokens.BG_INPUT, 1.0)
+        selected_bg = _with_alpha(tokens.PRIMARY, 0.22)
+        selected_text = tokens.TEXT_PRIMARY
+
         self.setStyleSheet(
             f"""
             QPushButton {{
-                background: #11192A;
+                background: {button_bg};
                 color: {tokens.TEXT_PRIMARY};
                 border: 1px solid {tokens.BORDER_SUBTLE};
                 border-radius: 8px;
@@ -54,7 +75,7 @@ class ThemeChooserMenu(QWidget):
                 border-color: {tokens.PRIMARY};
             }}
             QMenu {{
-                background: #101726;
+                background: {menu_bg};
                 color: {tokens.TEXT_PRIMARY};
                 border: 1px solid {tokens.BORDER_SUBTLE};
                 border-radius: 8px;
@@ -65,8 +86,8 @@ class ThemeChooserMenu(QWidget):
                 border-radius: 6px;
             }}
             QMenu::item:selected {{
-                background: rgba(30, 144, 255, 0.18);
-                color: {tokens.ACCENT};
+                background: {selected_bg};
+                color: {selected_text};
             }}
             """
         )

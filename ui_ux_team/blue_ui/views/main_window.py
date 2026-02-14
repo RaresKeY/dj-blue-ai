@@ -696,9 +696,6 @@ class MainUI(QWidget):
             self._bluebird_chat.refresh_theme()
         if self._meet_type is not None:
             self._meet_type.refresh_theme()
-        if self._settings_menu is not None:
-            self._settings_menu.close()
-            self._settings_menu = None
         if self.root.count():
             old_item = self.root.takeAt(0)
             old_widget = old_item.widget()
@@ -707,6 +704,8 @@ class MainUI(QWidget):
         self.root.addWidget(self.build_main_layout())
         if self._timeline is not None:
             self._timeline.refresh_theme()
+        if self._settings_menu is not None:
+            self._settings_menu.refresh_theme()
 
     def info_clicked(self):
         mood_items = [
