@@ -36,6 +36,11 @@ def set_theme(theme_key: str) -> str:
     for name, value in theme_tokens.items():
         setattr(tokens, name, value)
 
+    # Keep derived aliases coherent when palette definitions omit them.
+    # Most UI styles read TEXT_PRIMARY; palette entries define TEXT.
+    if "TEXT_PRIMARY" not in theme_tokens:
+        tokens.TEXT_PRIMARY = getattr(tokens, "TEXT", tokens.TEXT_PRIMARY)
+
     tokens.CURRENT_THEME_KEY = theme_key
     _save_theme_key(theme_key)
     return theme_key

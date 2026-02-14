@@ -1,6 +1,7 @@
 import json
 import re
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -132,10 +133,21 @@ class _TkBootstrapLoader:
 
         width = 560
         height = 220
-        screen_w = self._root.winfo_screenwidth()
-        screen_h = self._root.winfo_screenheight()
-        x = max(0, (screen_w - width) // 2)
-        y = max(0, (screen_h - height) // 2)
+        vroot_x = int(self._root.winfo_vrootx())
+        vroot_y = int(self._root.winfo_vrooty())
+        vroot_w = int(self._root.winfo_vrootwidth())
+        vroot_h = int(self._root.winfo_vrootheight())
+
+        pointer_x = int(self._root.winfo_pointerx())
+        pointer_y = int(self._root.winfo_pointery())
+        if pointer_x <= 0 and pointer_y <= 0:
+            pointer_x = vroot_x + (vroot_w // 2)
+            pointer_y = vroot_y + (vroot_h // 2)
+
+        x = pointer_x - (width // 2)
+        y = pointer_y - (height // 2)
+        x = max(vroot_x, min(x, (vroot_x + vroot_w) - width))
+        y = max(vroot_y, min(y, (vroot_y + vroot_h) - height))
         self._root.geometry(f"{width}x{height}+{x}+{y}")
 
         frame = tk.Frame(
@@ -308,22 +320,58 @@ def run() -> int:
     completed_weight = 0.0
 
     loader.start(estimated_total_seconds=total_weight, initial_status="Starting app bootstrap...")
+    loader.update_stage("Starting app bootstrap...", 0.8)
+    loader.smooth_pump(0.05)
 
     qt_app_factory = None
     app = None
     composer_cls = None
     composer = None
 
-    def _run_step(label: str, weight: float, action) -> None:
+    def _run_step(label: str, weight: float, action, *, async_mode: bool = False) -> None:
         nonlocal completed_weight
-        loader.update_stage(label, (completed_weight / total_weight) * 100.0)
-        action()
+        step_start = (completed_weight / total_weight) * 100.0
+        step_end = ((completed_weight + weight) / total_weight) * 100.0
+        loader.update_stage(label, step_start)
+
+        if async_mode:
+            errors: list[BaseException] = []
+            done = threading.Event()
+
+            def _worker() -> None:
+                try:
+                    action()
+                except BaseException as exc:
+                    errors.append(exc)
+                finally:
+                    done.set()
+
+            thread = threading.Thread(target=_worker, daemon=True)
+            thread.start()
+
+            # Planned slope keeps the bar moving smoothly from the first frames.
+            started = time.perf_counter()
+            expected_s = max(0.22, float(weight))
+            while not done.is_set():
+                elapsed = time.perf_counter() - started
+                plan_ratio = min(0.94, elapsed / expected_s)
+                target = step_start + ((step_end - step_start) * plan_ratio)
+                loader.update_stage(label, target)
+                loader.smooth_pump(0.016)
+
+            thread.join()
+            if errors:
+                raise errors[0]
+        else:
+            action()
+
         completed_weight += weight
-        loader.update_stage(label, (completed_weight / total_weight) * 100.0)
+        loader.update_stage(label, step_end)
+        loader.smooth_pump(0.035)
 
     from ui_ux_team.blue_ui.config import ensure_config_initialized
 
-    _run_step("Loading configuration...", 0.5, ensure_config_initialized)
+    _run_step("Loading configuration...", 0.5, ensure_config_initialized, async_mode=True)
 
     def _import_qt():
         nonlocal qt_app_factory
@@ -331,7 +379,7 @@ def run() -> int:
 
         qt_app_factory = _QApplication
 
-    _run_step("Importing UI framework...", 1.6, _import_qt)
+    _run_step("Importing UI framework...", 1.6, _import_qt, async_mode=True)
     if qt_app_factory is None:
         raise RuntimeError("Failed to import QApplication during startup.")
 
@@ -347,16 +395,16 @@ def run() -> int:
 
         composer_cls = _AppComposer
 
-    _run_step("Loading application modules...", 1.2, _import_composer)
+    _run_step("Loading application modules...", 1.2, _import_composer, async_mode=True)
     if composer_cls is None:
         raise RuntimeError("Failed to import AppComposer during startup.")
 
     from ui_ux_team.blue_ui.theme import ensure_default_theme
 
-    _run_step("Applying selected theme...", 0.7, ensure_default_theme)
+    _run_step("Applying selected theme...", 0.7, ensure_default_theme, async_mode=True)
 
     composer = composer_cls(auto_bootstrap=False)
-    _run_step("Initializing services...", 2.0, composer.build_services)
+    _run_step("Initializing services...", 2.0, composer.build_services, async_mode=True)
     _run_step("Building main interface...", 2.6, composer.build_window)
 
     loader.complete("Launch ready")
