@@ -13,11 +13,33 @@ from ui_ux_team.blue_ui.views.main_window import MainWindowView
 
 
 class AppComposer:
-    def __init__(self):
+    def __init__(self, auto_bootstrap: bool = True):
+        self.services = None
+        self.window = None
+        if auto_bootstrap:
+            self.bootstrap()
+
+    def bootstrap(self):
+        self.prepare_config()
+        self.prepare_theme()
+        self.build_services()
+        self.build_window()
+
+    @staticmethod
+    def prepare_config():
         ensure_config_initialized()
+
+    @staticmethod
+    def prepare_theme():
         ensure_default_theme()
+
+    def build_services(self) -> AppServices:
         self.services = self._build_services()
+        return self.services
+
+    def build_window(self):
         self.window = MainWindowView()
+        return self.window
 
     def _build_services(self) -> AppServices:
         api_key = os.getenv("AI_STUDIO_API_KEY")
@@ -39,4 +61,6 @@ class AppComposer:
         )
 
     def show(self):
+        if self.window is None:
+            self.build_window()
         self.window.show()

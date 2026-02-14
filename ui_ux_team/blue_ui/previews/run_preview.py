@@ -14,6 +14,7 @@ TARGET_TO_FILE = {
     "volume": "preview_volume.py",
     "timeline": "preview_timeline.py",
     "theme": "preview_theme_chooser.py",
+    "loading": "preview_loading_screen.py",
 }
 
 
