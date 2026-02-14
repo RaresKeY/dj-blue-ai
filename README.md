@@ -1,5 +1,5 @@
 # dj-blue-ai
-<img width="762" height="568" alt="image" src="https://github.com/user-attachments/assets/0ff4d5f6-e1ce-4dba-8a35-2cb0b3f93436" />
+<img alt="DJ Blue UI latest" src="architects/design_docs/ui_latest.png" />
 
 PySide6 desktop app for mood-aware meeting assist, music playback, transcript capture, and BlueBird AI chat.
 
