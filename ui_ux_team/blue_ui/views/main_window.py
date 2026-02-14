@@ -52,6 +52,51 @@ BASE = resource_path("ui_ux_team/assets")
 T_CHUNK = 30
 
 
+def _parse_color(value: str, fallback: str) -> QColor:
+    color = QColor((value or "").strip())
+    if color.isValid():
+        return color
+    fallback_color = QColor(fallback)
+    if fallback_color.isValid():
+        return fallback_color
+    return QColor("#FFFFFF")
+
+
+def _color_with_alpha(value: str, alpha: float, fallback: str) -> str:
+    c = _parse_color(value, fallback)
+    a = max(0.0, min(1.0, float(alpha)))
+    return f"rgba({c.red()}, {c.green()}, {c.blue()}, {a:.3f})"
+
+
+def _contrast_ratio(fg: QColor, bg: QColor) -> float:
+    def channel(v: int) -> float:
+        c = float(v) / 255.0
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    def luminance(color: QColor) -> float:
+        return (
+            0.2126 * channel(color.red())
+            + 0.7152 * channel(color.green())
+            + 0.0722 * channel(color.blue())
+        )
+
+    l1 = luminance(fg)
+    l2 = luminance(bg)
+    lighter = max(l1, l2)
+    darker = min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _resolve_contrast_text(bg_color: str, preferred_text: str, minimum_ratio: float = 4.5) -> str:
+    bg = _parse_color(bg_color, "#1E1E1E")
+    preferred = _parse_color(preferred_text, "#D4D4D4")
+    if _contrast_ratio(preferred, bg) >= minimum_ratio:
+        return preferred.name()
+    white = QColor("#FFFFFF")
+    black = QColor("#000000")
+    return white.name() if _contrast_ratio(white, bg) >= _contrast_ratio(black, bg) else black.name()
+
+
 class MainUI(QWidget):
     transcript_ready = Signal(dict)
     _AUDIO_EXTS = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"}
@@ -229,6 +274,15 @@ class MainUI(QWidget):
         missing_playlist_files = self._missing_playlist_files()
         playlist_match_ok = len(missing_playlist_files) == 0
         can_start_cycle = api_ok and music_non_empty and playlist_match_ok
+        popup_bg = getattr(theme_tokens, "COLOR_BG_MAIN", getattr(theme_tokens, "BACKGROUND", "#1E1E1E"))
+        title_color = _resolve_contrast_text(popup_bg, getattr(theme_tokens, "TEXT_PRIMARY", "#D4D4D4"), 4.5)
+        body_color = _resolve_contrast_text(popup_bg, getattr(theme_tokens, "TEXT_MUTED", "#A9B1BA"), 4.5)
+        status_bg = _color_with_alpha(getattr(theme_tokens, "BG_INPUT", "#252526"), 0.92, "#252526")
+        btn_fg = getattr(theme_tokens, "ACCENT", "#FF9B54")
+        btn_bg = _color_with_alpha(btn_fg, 0.14, "#FF9B54")
+        btn_bg_hover = _color_with_alpha(btn_fg, 0.24, "#FF9B54")
+        btn_border = _color_with_alpha(btn_fg, 0.62, "#FF9B54")
+        btn_disabled = _color_with_alpha(btn_fg, 0.45, "#FF9B54")
 
         popup = QDialog(self)
         popup.setWindowTitle("Start Recording/Playback Cycle")
@@ -240,13 +294,13 @@ class MainUI(QWidget):
         root.setSpacing(10)
 
         title = QLabel("Start recording/playback cycle?")
-        title.setStyleSheet(f"color: {theme_tokens.TEXT_PRIMARY}; font-size: 18px; font-weight: 700;")
+        title.setStyleSheet(f"color: {title_color}; font-size: 18px; font-weight: 700;")
         intro = QLabel(
             "The app requires API key, non-empty music collection, and full playlist file match "
             "with mood_readers/data/mood_playlists_organized.json."
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet(f"color: {theme_tokens.TEXT_MUTED}; font-size: 13px;")
+        intro.setStyleSheet(f"color: {body_color}; font-size: 13px;")
 
         status_lines = []
         status_lines.append(f"{'OK' if api_ok else 'WARN'}: API key configured")
@@ -258,9 +312,9 @@ class MainUI(QWidget):
         status_label.setWordWrap(True)
         status_label.setStyleSheet(
             f"""
-            color: {theme_tokens.TEXT_PRIMARY};
+            color: {title_color};
             font-size: 13px;
-            background: rgba(13, 19, 32, 0.35);
+            background: {status_bg};
             border: 1px solid {theme_tokens.BORDER_SUBTLE};
             border-radius: 10px;
             padding: 10px;
@@ -282,7 +336,7 @@ class MainUI(QWidget):
 
         details = QLabel("\n".join(detail_lines) if detail_lines else "All requirements are satisfied.")
         details.setWordWrap(True)
-        details.setStyleSheet(f"color: {theme_tokens.TEXT_MUTED}; font-size: 13px;")
+        details.setStyleSheet(f"color: {body_color}; font-size: 13px;")
 
         start_btn = QPushButton("Start cycle")
         start_btn.setEnabled(can_start_cycle)
@@ -311,29 +365,34 @@ class MainUI(QWidget):
         popup.setStyleSheet(
             f"""
             QDialog {{
-                background: {theme_tokens.COLOR_BG_MAIN};
+                background: {popup_bg};
                 border: 1px solid {theme_tokens.BORDER_SUBTLE};
                 border-radius: 12px;
             }}
             QPushButton {{
-                background: rgba(255, 138, 61, 0.14);
-                color: #FF8A3D;
-                border: 1px solid rgba(255, 138, 61, 0.62);
+                background: {btn_bg};
+                color: {btn_fg};
+                border: 1px solid {btn_border};
                 border-radius: 8px;
                 padding: 8px 14px;
                 font-weight: 600;
                 min-width: 110px;
             }}
             QPushButton:hover {{
-                background: rgba(255, 138, 61, 0.22);
+                background: {btn_bg_hover};
             }}
             QPushButton:disabled {{
-                background: rgba(255, 138, 61, 0.08);
-                color: rgba(255, 138, 61, 0.45);
-                border: 1px solid rgba(255, 138, 61, 0.24);
+                background: {btn_bg};
+                color: {btn_disabled};
+                border: 1px solid {btn_disabled};
             }}
             """
         )
+        popup.adjustSize()
+        required_h = popup.sizeHint().height()
+        required_w = popup.sizeHint().width()
+        popup.setMinimumHeight(max(popup.minimumHeight(), required_h))
+        popup.resize(max(popup.minimumWidth(), required_w), max(popup.minimumHeight(), required_h))
         popup.finished.connect(lambda *_: setattr(self, "_startup_cycle_popup", None))
         self._startup_cycle_popup = popup
         popup.open()
@@ -409,6 +468,11 @@ class MainUI(QWidget):
             }}
             """
         )
+        popup.adjustSize()
+        required_h = popup.sizeHint().height()
+        required_w = popup.sizeHint().width()
+        popup.setMinimumHeight(max(popup.minimumHeight(), required_h))
+        popup.resize(max(popup.minimumWidth(), required_w), max(popup.minimumHeight(), required_h))
         popup.finished.connect(lambda *_: setattr(self, "_music_empty_popup", None))
         self._music_empty_popup = popup
         popup.open()
