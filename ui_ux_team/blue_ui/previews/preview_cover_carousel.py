@@ -36,7 +36,7 @@ class CoverCarouselPreview(QWidget):
                 "radiohead_everything_in_its_right_place_remastered_2025.ogg",
             ]
         )
-        root.addWidget(self.carousel, alignment=Qt.AlignCenter)
+        root.addWidget(self.carousel, alignment=Qt.AlignTop | Qt.AlignHCenter)
 
         controls = QHBoxLayout()
         prev_btn = QPushButton("Prev")

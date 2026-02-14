@@ -6,13 +6,15 @@ from PySide6.QtCore import QSize
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QHBoxLayout,
+    QLabel,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from architects.helpers.resource_path import resource_path
-from ui_ux_team.blue_ui.widgets.cover_song_titles import CoverSongTitlesRow
+from ui_ux_team.blue_ui.theme import tokens as theme_tokens
+from ui_ux_team.blue_ui.widgets.cover_song_titles import HoverMarqueeTitle
 from ui_ux_team.blue_ui.widgets.image_button import IMAGE_NOT_FOUND, ImageButton
 
 
@@ -53,31 +55,35 @@ class SongCoverCarousel(QWidget):
         self._next_effect.setOpacity(0.66)
         self._next.setGraphicsEffect(self._next_effect)
 
-        self._prev_slot = self._make_cover_slot(self._prev)
-        self._current_slot = self._make_cover_slot(self._current)
-        self._next_slot = self._make_cover_slot(self._next)
+        self._prev_slot, self._prev_slot_layout = self._make_cover_slot(self._prev)
+        self._current_slot, self._current_slot_layout = self._make_cover_slot(self._current)
+        self._next_slot, self._next_slot_layout = self._make_cover_slot(self._next)
+
+        self._prev_title = HoverMarqueeTitle("")
+        self._prev_title.setObjectName("CoverSongTitlePrev")
+        self._current_title = HoverMarqueeTitle("")
+        self._current_title.setObjectName("CoverSongTitleCurrent")
+        self._next_title = HoverMarqueeTitle("")
+        self._next_title.setObjectName("CoverSongTitleNext")
+
+        self._prev_col = self._make_cover_column(self._prev_slot, self._prev_title)
+        self._current_col = self._make_cover_column(self._current_slot, self._current_title)
+        self._next_col = self._make_cover_column(self._next_slot, self._next_title)
 
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
         top_row.setSpacing(6)
-        top_row.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
+        top_row.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
         self._row = top_row
-        top_row.addWidget(self._prev_slot, 0, Qt.AlignVCenter)
-        top_row.addWidget(self._current_slot, 0, Qt.AlignVCenter)
-        top_row.addWidget(self._next_slot, 0, Qt.AlignVCenter)
-
-        self._titles = CoverSongTitlesRow()
-        self._titles.set_spacing(top_row.spacing())
-        self._titles.setContentsMargins(0, 0, 0, 0)
-        self._titles.setFixedHeight(self._title_row_height)
+        top_row.addWidget(self._prev_col, 0, Qt.AlignTop)
+        top_row.addWidget(self._current_col, 0, Qt.AlignTop)
+        top_row.addWidget(self._next_col, 0, Qt.AlignTop)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         root.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-        self._root = root
         root.addLayout(top_row)
-        root.addWidget(self._titles, alignment=Qt.AlignTop | Qt.AlignHCenter)
 
         self._prev.clicked.connect(self._on_prev_clicked)
         self._current.clicked.connect(self._on_current_clicked)
@@ -86,19 +92,20 @@ class SongCoverCarousel(QWidget):
         self._set_fallback_song_items()
         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Minimum)
         self.setMinimumHeight(152)
+        self.refresh_theme()
         self._refresh()
         self._update_cover_sizes()
 
     def sizeHint(self) -> QSize:
         side = int(round(self._preferred_center * self._ratio_side_to_center))
         width = self._preferred_center + (2 * side) + (2 * self._row.spacing())
-        height = self._preferred_center + self._title_row_height + self._root.spacing()
+        height = self._preferred_center + self._title_row_height
         return QSize(width, height)
 
     def minimumSizeHint(self) -> QSize:
         side = int(round(self._min_center * self._ratio_side_to_center))
         width = self._min_center + (2 * side) + (2 * self._row.spacing())
-        height = self._min_center + self._title_row_height + self._root.spacing()
+        height = self._min_center + self._title_row_height
         return QSize(width, height)
 
     @staticmethod
@@ -111,16 +118,26 @@ class SongCoverCarousel(QWidget):
         return covers
 
     @staticmethod
-    def _make_cover_slot(button: QWidget) -> QWidget:
+    def _make_cover_slot(button: QWidget) -> tuple[QWidget, QVBoxLayout]:
         slot = QWidget()
         slot.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         layout = QVBoxLayout(slot)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addStretch(1)
-        layout.addWidget(button, 0, Qt.AlignHCenter | Qt.AlignVCenter)
-        layout.addStretch(1)
-        return slot
+        layout.addWidget(button, 0, Qt.AlignHCenter | Qt.AlignTop)
+        return slot, layout
+
+    @staticmethod
+    def _make_cover_column(cover_slot: QWidget, title_widget: QLabel) -> QWidget:
+        column = QWidget()
+        column.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        layout = QVBoxLayout(column)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        layout.addWidget(cover_slot, 0, Qt.AlignTop | Qt.AlignHCenter)
+        layout.addWidget(title_widget, 0, Qt.AlignTop | Qt.AlignHCenter)
+        return column
 
     def cover_paths(self) -> list[str]:
         return list(self._covers)
@@ -194,11 +211,9 @@ class SongCoverCarousel(QWidget):
         self._prev.set_image(self._cycle_cover(-1))
         self._current.set_image(self._cycle_cover(0))
         self._next.set_image(self._cycle_cover(1))
-        self._titles.set_titles(
-            self._cycle_title(-1),
-            self._cycle_title(0),
-            self._cycle_title(1),
-        )
+        self._prev_title.setText(self._cycle_title(-1))
+        self._current_title.setText(self._cycle_title(0))
+        self._next_title.setText(self._cycle_title(1))
         self._animate_side_fade(self._prev_effect)
         self._animate_side_fade(self._next_effect)
         self.current_changed.emit(self._cycle_cover(0))
@@ -240,13 +255,34 @@ class SongCoverCarousel(QWidget):
         self._refresh()
 
     def refresh_theme(self):
-        self._titles.refresh_theme()
+        self.setStyleSheet(
+            f"""
+            QLabel#CoverSongTitlePrev {{
+                color: {theme_tokens.TEXT_MUTED};
+                font-size: 12px;
+                font-weight: 500;
+                background: transparent;
+            }}
+            QLabel#CoverSongTitleCurrent {{
+                color: {theme_tokens.TEXT_PRIMARY};
+                font-size: 13px;
+                font-weight: 700;
+                background: transparent;
+            }}
+            QLabel#CoverSongTitleNext {{
+                color: {theme_tokens.TEXT_MUTED};
+                font-size: 12px;
+                font-weight: 500;
+                background: transparent;
+            }}
+            """
+        )
 
     def _update_cover_sizes(self):
         spacing = self._row.spacing()
         usable_w = max(1, self.width() - (spacing * 2))
         title_h = self._title_row_height
-        usable_h = max(1, self.height() - title_h - self._root.spacing())
+        usable_h = max(1, self.height() - title_h)
 
         ratio = self._ratio_side_to_center
         max_center_by_w = int(usable_w / (1.0 + (2.0 * ratio)))
@@ -259,23 +295,32 @@ class SongCoverCarousel(QWidget):
         self._current.setFixedSize(center, center)
         self._prev.setFixedSize(side, side)
         self._next.setFixedSize(side, side)
-        self._prev_slot.setFixedSize(side, center)
+        side_top_pad = max(0, (center - side) // 2)
+        side_slot_h = side_top_pad + side
+        self._prev_slot.setFixedSize(side, side_slot_h)
         self._current_slot.setFixedSize(center, center)
-        self._next_slot.setFixedSize(side, center)
+        self._next_slot.setFixedSize(side, side_slot_h)
+        self._prev_col.setFixedSize(side, side_slot_h + title_h)
+        self._current_col.setFixedSize(center, center + title_h)
+        self._next_col.setFixedSize(side, side_slot_h + title_h)
+        self._prev_slot_layout.setContentsMargins(0, side_top_pad, 0, 0)
+        self._current_slot_layout.setContentsMargins(0, 0, 0, 0)
+        self._next_slot_layout.setContentsMargins(0, side_top_pad, 0, 0)
+        self._prev_title.setFixedSize(side, title_h)
+        self._current_title.setFixedSize(center, title_h)
+        self._next_title.setFixedSize(side, title_h)
 
         # Keep enough internal breathing room so 1.06 hover scale does not look clipped.
         center_pad = max(4, int(center * 0.06))
         side_pad = max(3, int(side * 0.06))
-        self._current.setContentsMargins(center_pad, center_pad, center_pad, center_pad)
-        self._prev.setContentsMargins(side_pad, side_pad, side_pad, side_pad)
-        self._next.setContentsMargins(side_pad, side_pad, side_pad, side_pad)
+        self._current.setContentsMargins(center_pad, center_pad, center_pad, 1)
+        self._prev.setContentsMargins(side_pad, side_pad, side_pad, 1)
+        self._next.setContentsMargins(side_pad, side_pad, side_pad, 1)
 
         self._current.set_corner_radius(max(14, int(center * 0.10)))
         side_radius = max(10, int(side * 0.10))
         self._prev.set_corner_radius(side_radius)
         self._next.set_corner_radius(side_radius)
-        self._titles.set_slot_widths(side, center, side)
-        self._titles.setFixedHeight(self._title_row_height)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

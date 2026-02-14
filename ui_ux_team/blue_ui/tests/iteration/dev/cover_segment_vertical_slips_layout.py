@@ -25,7 +25,6 @@ class CoverSegmentVerticalSlipsLayoutTestComponent(QWidget):
     _SIDE_STRIP_W = 170
     _CENTER_STRIP_W = 240
     _TITLE_H = 34
-    _COVER_TRACK_H = _CENTER_COVER
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -103,7 +102,11 @@ class CoverSegmentVerticalSlipsLayoutTestComponent(QWidget):
         title_bg: str,
         title_border: str,
     ) -> QFrame:
-        strip_h = self._COVER_TRACK_H + self._TITLE_H
+        center_cover_h = int(self._CENTER_COVER)
+        cover_h = int(cover_size)
+        cover_top_pad = max(0, (center_cover_h - cover_h) // 2)
+        cover_track_h = cover_top_pad + cover_h
+        strip_h = cover_track_h + self._TITLE_H
 
         strip = _color_frame(strip_name, strip_bg, strip_border, 8)
         strip.setFixedSize(int(strip_w), int(strip_h))
@@ -114,16 +117,14 @@ class CoverSegmentVerticalSlipsLayoutTestComponent(QWidget):
         strip_layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
         cover_track = _color_frame(f"{strip_name}_COVER_TRACK", "#1D2B44", "#5D78A8", 6)
-        cover_track.setFixedHeight(self._COVER_TRACK_H)
+        cover_track.setFixedHeight(int(cover_track_h))
         track_layout = QVBoxLayout(cover_track)
-        track_layout.setContentsMargins(0, 0, 0, 0)
+        track_layout.setContentsMargins(0, int(cover_top_pad), 0, 0)
         track_layout.setSpacing(0)
-        track_layout.addStretch(1)
 
         cover = _color_frame(cover_name, cover_bg, cover_border, 12)
         cover.setFixedSize(int(cover_size), int(cover_size))
-        track_layout.addWidget(cover, 0, Qt.AlignHCenter | Qt.AlignVCenter)
-        track_layout.addStretch(1)
+        track_layout.addWidget(cover, 0, Qt.AlignHCenter | Qt.AlignTop)
 
         title = _color_frame(title_name, title_bg, title_border, 7)
         title.setFixedSize(int(cover_size), int(self._TITLE_H))
@@ -131,4 +132,3 @@ class CoverSegmentVerticalSlipsLayoutTestComponent(QWidget):
         strip_layout.addWidget(cover_track, 0, Qt.AlignTop)
         strip_layout.addWidget(title, 0, Qt.AlignHCenter | Qt.AlignTop)
         return strip
-
