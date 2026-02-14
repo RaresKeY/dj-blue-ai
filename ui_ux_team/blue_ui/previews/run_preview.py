@@ -12,6 +12,7 @@ TARGET_TO_FILE = {
     "widgets": "preview_widgets.py",
     "covers": "preview_cover_carousel.py",
     "iter_cover_layout": "iteration/preview_cover_segment_layout_boxes.py",
+    "iter_cover_vertical_slips": "iteration/preview_cover_segment_vertical_slips_layout.py",
     "cover_boxes": "preview_cover_layout_boxes.py",
     "cover_titles": "preview_cover_song_titles.py",
     "volume": "preview_volume.py",

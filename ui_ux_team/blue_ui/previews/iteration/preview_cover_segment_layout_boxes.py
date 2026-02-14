@@ -1,8 +1,7 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 
 project_root = Path(__file__).resolve()
 while project_root.name != "ui_ux_team" and project_root != project_root.parent:
@@ -19,15 +18,11 @@ class CoverSegmentLayoutBoxesPreview(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Cover Segment Layout Boxes Scaffold")
-        self.resize(900, 560)
+        self.resize(930, 560)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(8)
-        title = QLabel("Iteration Scaffold: Cover Segment Layout Boundaries")
-        title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size: 16px; font-weight: 700;")
-        root.addWidget(title)
+        root.setSpacing(0)
         root.addWidget(CoverSegmentLayoutBoxesTestComponent(), 1)
 
 
