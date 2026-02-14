@@ -1,6 +1,37 @@
 from PySide6.QtWidgets import QLabel, QWidget, QHBoxLayout, QGraphicsOpacityEffect
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtCore import QTimer, QEvent, QPropertyAnimation
+
+from ui_ux_team.blue_ui.theme import tokens as theme_tokens
+
+
+def _parse_color(value: str, fallback: str) -> QColor:
+    color = QColor(value or "")
+    if color.isValid():
+        return color
+    fallback_color = QColor(fallback)
+    if fallback_color.isValid():
+        return fallback_color
+    return QColor("#FFFFFF")
+
+
+def _contrast_ratio(fg: QColor, bg: QColor) -> float:
+    def channel(v: int) -> float:
+        c = float(v) / 255.0
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    def luminance(color: QColor) -> float:
+        return (
+            0.2126 * channel(color.red())
+            + 0.7152 * channel(color.green())
+            + 0.0722 * channel(color.blue())
+        )
+
+    l1 = luminance(fg)
+    l2 = luminance(bg)
+    lighter = max(l1, l2)
+    darker = min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
 
 
 class MarqueeLabel(QLabel):
@@ -10,9 +41,11 @@ class MarqueeLabel(QLabel):
         self._text_width = 0
         self._gap = gap
         self._step = step
+        self._text_color = QColor("#FFFFFF")
 
         self.setText(text)
         self.setContentsMargins(10, 0, 10, 0)
+        self.refresh_theme()
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
@@ -33,6 +66,7 @@ class MarqueeLabel(QLabel):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.TextAntialiasing)
+        painter.setPen(self._text_color)
         fm = self.fontMetrics()
         text = self.text()
         y = (self.height() + fm.ascent() - fm.descent()) / 2
@@ -45,9 +79,22 @@ class MarqueeLabel(QLabel):
             painter.drawText(x, y, text)
             x += span
 
+    def refresh_theme(self):
+        bg = _parse_color(getattr(theme_tokens, "COLOR_BG_MAIN", "#1E1E1E"), "#1E1E1E")
+        preferred = _parse_color(getattr(theme_tokens, "TEXT_PRIMARY", "#D4D4D4"), "#D4D4D4")
+        if _contrast_ratio(preferred, bg) >= 4.5:
+            self._text_color = preferred
+        else:
+            white = QColor("#FFFFFF")
+            black = QColor("#000000")
+            self._text_color = white if _contrast_ratio(white, bg) >= _contrast_ratio(black, bg) else black
+        self.update()
+
     def changeEvent(self, event):
         if event.type() == QEvent.FontChange:
             self.setText(self.text())
+        elif event.type() in (QEvent.PaletteChange, QEvent.StyleChange):
+            self.refresh_theme()
         super().changeEvent(event)
 
 
@@ -108,3 +155,6 @@ class QueuedMarqueeLabel(QWidget):
         anim_in.setEndValue(1.0)
         anim_in.finished.connect(lambda: self._timer.start(self._hold_ms))
         anim_in.start(QPropertyAnimation.DeleteWhenStopped)
+
+    def refresh_theme(self):
+        self.label.refresh_theme()
