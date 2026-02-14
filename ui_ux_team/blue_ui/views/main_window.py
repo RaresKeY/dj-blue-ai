@@ -248,6 +248,15 @@ class MainUI(QWidget):
             return set()
         return names
 
+    def _music_tracks(self) -> list[Path]:
+        try:
+            return sorted(
+                [p for p in self._music_folder.iterdir() if p.is_file() and p.suffix.lower() in self._AUDIO_EXTS],
+                key=lambda p: p.name.lower(),
+            )
+        except Exception:
+            return []
+
     def _missing_playlist_files(self) -> list[str]:
         required = self._required_playlist_filenames()
         if not required:
@@ -752,6 +761,7 @@ class MainUI(QWidget):
         if self._music_path_edit is not None:
             self._music_path_edit.setText(str(self._music_folder))
         self._notify_if_music_folder_empty()
+        self._sync_carousel_song_items()
 
     def _apply_theme_and_rebuild(self, theme_key: str):
         set_theme(theme_key)
@@ -830,7 +840,7 @@ class MainUI(QWidget):
     def build_cover_images(self):
         covers = self.color_box("transparent")
         covers.setContentsMargins(0, 0, 0, 0)
-        covers.setMinimumHeight(220)
+        covers.setMinimumHeight(265)
         covers.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         covers_layout = QHBoxLayout()
@@ -840,10 +850,40 @@ class MainUI(QWidget):
         self._cover_carousel.prev_requested.connect(self.prev_action)
         self._cover_carousel.current_requested.connect(self.play_click)
         self._cover_carousel.next_requested.connect(self.next_action)
+        self._cover_carousel.current_song_changed.connect(self._on_cover_song_changed)
+        self._sync_carousel_song_items()
         covers_layout.addWidget(self._cover_carousel, alignment=Qt.AlignCenter)
         covers.setLayout(covers_layout)
 
         return covers
+
+    def _sync_carousel_song_items(self):
+        if self._cover_carousel is None:
+            return
+        self._cover_carousel.set_song_items(self._music_tracks())
+
+    def _on_cover_song_changed(self, song_path: str):
+        selected = str(song_path or "").strip()
+        if not selected:
+            return
+
+        if self._currently_playing == selected:
+            return
+
+        was_playing = bool(self._player is not None and self._player.is_playing())
+
+        if self._player is not None and not was_playing:
+            try:
+                self._player.stop()
+            except Exception:
+                pass
+            self._player = None
+
+        self._currently_playing = selected
+        if was_playing:
+            self.basic_music_play(selected)
+        elif self._play_btn is not None:
+            self._play_btn.set_image("assets/play.png")
 
     def build_main_timeline(self):
         timeline_box = self.color_box("transparent")

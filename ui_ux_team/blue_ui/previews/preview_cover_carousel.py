@@ -27,6 +27,15 @@ class CoverCarouselPreview(QWidget):
         root.addWidget(title)
 
         self.carousel = SongCoverCarousel()
+        self.carousel.set_song_items(
+            [
+                "queen_bohemian_rhapsody_live_at_wembley_1986.mp3",
+                "fleetwood_mac_the_chain_2004_remaster.flac",
+                "deep_purple_smoke_on_the_water_live_in_japan_1972.wav",
+                "pink_floyd_comfortably_numb_pulse_1994_extended_version.mp3",
+                "radiohead_everything_in_its_right_place_remastered_2025.ogg",
+            ]
+        )
         root.addWidget(self.carousel, alignment=Qt.AlignCenter)
 
         controls = QHBoxLayout()
@@ -36,11 +45,11 @@ class CoverCarouselPreview(QWidget):
         controls.addWidget(next_btn)
         root.addLayout(controls)
 
-        self.current_label = QLabel("Current: -")
+        self.current_label = QLabel("Current song: -")
         root.addWidget(self.current_label)
 
         self.list_widget = QListWidget()
-        for p in self.carousel.cover_paths():
+        for p in self.carousel.song_paths():
             self.list_widget.addItem(Path(p).name)
         root.addWidget(self.list_widget, 1)
 
@@ -48,9 +57,12 @@ class CoverCarouselPreview(QWidget):
         next_btn.clicked.connect(self.carousel.step_next)
         self.carousel.prev_requested.connect(self.carousel.step_prev)
         self.carousel.next_requested.connect(self.carousel.step_next)
-        self.carousel.current_changed.connect(lambda p: self.current_label.setText(f"Current: {Path(p).name}"))
-        if self.carousel.cover_paths():
-            self.current_label.setText(f"Current: {Path(self.carousel.cover_paths()[0]).name}")
+        self.carousel.current_song_changed.connect(self._on_song_changed)
+        self._on_song_changed(self.carousel.current_song_path())
+
+    def _on_song_changed(self, song_path: str):
+        name = Path(song_path).name if song_path else "-"
+        self.current_label.setText(f"Current song: {name}")
 
 
 if __name__ == "__main__":
