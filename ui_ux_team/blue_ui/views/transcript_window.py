@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
 
 from architects.helpers.resource_path import resource_path
 from ui_ux_team.blue_ui.theme import tokens
+from ui_ux_team.blue_ui.theme.native_window import apply_native_titlebar_for_theme
 from ui_ux_team.blue_ui.widgets.image_button import ImageButton
 from ui_ux_team.blue_ui.widgets.text_boxes import TextBox, SearchBar
 
@@ -47,6 +48,7 @@ class TranscriptWindowView(QWidget):
             }}
             """
         )
+        apply_native_titlebar_for_theme(self)
         self.search_bar.refresh_theme()
         self.text_box.refresh_theme()
 

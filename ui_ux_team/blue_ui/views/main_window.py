@@ -29,6 +29,7 @@ from architects.helpers.tabs_audio import get_display_names
 from architects.helpers.transcription_manager import TranscriptionManager
 from ui_ux_team.blue_ui.config import default_music_folder, get_setting, set_setting
 from ui_ux_team.blue_ui.theme import set_theme
+from ui_ux_team.blue_ui.theme.native_window import apply_native_titlebar_for_theme
 from ui_ux_team.blue_ui.theme import tokens as theme_tokens
 from ui_ux_team.blue_ui.views.chat_window import BlueBirdChatView
 from ui_ux_team.blue_ui.views.settings_popup import FloatingMenu, SettingsPopup
@@ -105,6 +106,7 @@ class MainUI(QWidget):
         super().__init__()
         self.setWindowTitle("DJ Blue UI")
         self.resize(721, 487)
+        apply_native_titlebar_for_theme(self)
 
         self._play_btn = None
         self._player = None
@@ -654,6 +656,7 @@ class MainUI(QWidget):
             y = self.y()
             self._transcript_win.move(x + 10, y)
             self._transcript_win.resize(400, self.height())
+            apply_native_titlebar_for_theme(self._transcript_win)
             self._transcript_win.show()
             return
 
@@ -776,10 +779,14 @@ class MainUI(QWidget):
 
     def _apply_theme_and_rebuild(self, theme_key: str):
         set_theme(theme_key)
+        apply_native_titlebar_for_theme(self, theme_key)
+        apply_native_titlebar_for_theme(self._transcript_win, theme_key)
         self._transcript_win.refresh_theme()
         if self._bluebird_chat is not None:
+            apply_native_titlebar_for_theme(self._bluebird_chat, theme_key)
             self._bluebird_chat.refresh_theme()
         if self._meet_type is not None:
+            apply_native_titlebar_for_theme(self._meet_type, theme_key)
             self._meet_type.refresh_theme()
         if self.root.count():
             old_item = self.root.takeAt(0)
@@ -790,6 +797,7 @@ class MainUI(QWidget):
         if self._timeline is not None:
             self._timeline.refresh_theme()
         if self._settings_menu is not None:
+            apply_native_titlebar_for_theme(self._settings_menu, theme_key)
             self._settings_menu.refresh_theme()
 
     def info_clicked(self):
@@ -990,6 +998,7 @@ class MainUI(QWidget):
             y = self.y()
             self._bluebird_chat.move(x - 10, y)
             self._bluebird_chat.resize(400, self.height())
+            apply_native_titlebar_for_theme(self._bluebird_chat)
             self._bluebird_chat.show()
             return
 

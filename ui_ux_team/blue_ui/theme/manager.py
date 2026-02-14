@@ -28,6 +28,15 @@ def theme_label(theme_key: str) -> str:
     return THEMES.get(theme_key, {}).get("label", theme_key)
 
 
+def is_theme_dark(theme_key: str | None = None) -> bool:
+    key = str(theme_key or tokens.CURRENT_THEME_KEY or DEFAULT_THEME_KEY).strip()
+    entry = THEMES.get(key, THEMES.get(DEFAULT_THEME_KEY, {}))
+    appearance = str(entry.get("appearance", "dark")).strip().lower()
+    if appearance == "light":
+        return False
+    return True
+
+
 def set_theme(theme_key: str) -> str:
     if theme_key not in THEMES:
         raise KeyError(f"Unknown theme: {theme_key}")

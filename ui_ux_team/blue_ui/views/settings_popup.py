@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFont
 from ui_ux_team.blue_ui.theme import tokens
+from ui_ux_team.blue_ui.theme.native_window import apply_native_titlebar_for_theme
 
 ORANGE_SELECTION = "#FF8A3D"
 
@@ -282,6 +283,7 @@ class SettingsPopup(QWidget):
             """
         )
         self.title_bar.refresh_theme()
+        apply_native_titlebar_for_theme(self)
         for i in range(self.stack.count()):
             w = self.stack.widget(i)
             if isinstance(w, QListWidget):
@@ -328,6 +330,7 @@ class SettingsPopup(QWidget):
         h = parent_size.height() - (self.margin * 2) - titlebar_h
 
         self.setGeometry(x, y, w, h)
+        apply_native_titlebar_for_theme(self)
         self.show()
 
 

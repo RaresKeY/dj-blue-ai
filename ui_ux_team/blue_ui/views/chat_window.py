@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
 from architects.helpers.gemini_chatbot import GeminiChatbot
 from architects.helpers.resource_path import resource_path
 from ui_ux_team.blue_ui.theme import tokens
+from ui_ux_team.blue_ui.theme.native_window import apply_native_titlebar_for_theme
 from ui_ux_team.blue_ui.widgets.image_button import ImageButton
 from ui_ux_team.blue_ui.widgets.text_boxes import TextBoxAI, InputBlueBird
 from ui_ux_team.blue_ui.widgets.loading import LoadingCircle
@@ -114,6 +115,7 @@ class BlueBirdChatView(QWidget):
             }}
             """
         )
+        apply_native_titlebar_for_theme(self)
         self.text_box.refresh_theme()
         self.input_field.refresh_theme()
 

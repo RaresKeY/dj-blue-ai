@@ -11,6 +11,7 @@ THEMES = {
     "bluebird_soft": {
         "label": "Bluebird Soft",
         "source": "internal current",
+        "appearance": "dark",
         "tokens": {
             "PRIMARY": "#1E90FF",
             "ACCENT": "#FF69B4",
@@ -40,6 +41,7 @@ THEMES = {
     "pastel_dusk": {
         "label": "Pastel Dusk",
         "source": "schemecolor",
+        "appearance": "dark",
         "tokens": {
             "PRIMARY": "#C7E6FC",
             "ACCENT": "#F5B3D7",
@@ -69,6 +71,7 @@ THEMES = {
     "lavender_mist": {
         "label": "Lavender Mist",
         "source": "schemecolor",
+        "appearance": "dark",
         "tokens": {
             "PRIMARY": "#86CBED",
             "ACCENT": "#F48BA9",
@@ -98,6 +101,7 @@ THEMES = {
     "midnight_pastel": {
         "label": "Midnight Pastel",
         "source": "colorhunt/coolors blend",
+        "appearance": "dark",
         "tokens": {
             "PRIMARY": "#917BC9",
             "ACCENT": "#F2AECC",
@@ -127,6 +131,7 @@ THEMES = {
     "aurora_pastel": {
         "label": "Aurora Pastel",
         "source": "coolors-inspired",
+        "appearance": "dark",
         "tokens": {
             "PRIMARY": "#9DD9F3",
             "ACCENT": "#F5A6C8",
@@ -156,6 +161,7 @@ THEMES = {
     "sky_rose": {
         "label": "Sky Rose",
         "source": "colorhunt-inspired",
+        "appearance": "dark",
         "tokens": {
             "PRIMARY": "#A8D8FF",
             "ACCENT": "#FF9CC7",
@@ -185,6 +191,7 @@ THEMES = {
     "dark_theme": {
         "label": "Dark Theme",
         "source": "vscode-inspired",
+        "appearance": "dark",
         "tokens": {
             "PRIMARY": "#569CD6",
             "ACCENT": "#FF9B54",
@@ -214,6 +221,7 @@ THEMES = {
     "light_theme": {
         "label": "Light Theme",
         "source": "vscode-inspired",
+        "appearance": "light",
         "tokens": {
             "PRIMARY": "#007ACC",
             "ACCENT": "#E26F00",
