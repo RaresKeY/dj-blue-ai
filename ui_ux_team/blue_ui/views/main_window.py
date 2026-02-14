@@ -311,18 +311,29 @@ class MainUI(QWidget):
         intro.setWordWrap(True)
         intro.setStyleSheet(f"color: {body_color}; font-size: 13px;")
 
-        status_lines = []
-        status_lines.append(f"{'OK' if api_ok else 'WARN'}: API key configured")
-        status_lines.append(f"{'OK' if music_non_empty else 'WARN'}: Music collection has audio files")
-        status_lines.append(
-            f"{'OK' if playlist_match_ok else 'WARN'}: Music collection matches mood_playlists_organized.json"
+        def _status_html(is_ok: bool, text: str) -> str:
+            icon = "✅" if is_ok else "❌"
+            state = "OK" if is_ok else "WARN"
+            return f"<div><b>{icon} {state}: {text}</b></div>"
+
+        status_html = "".join(
+            [
+                _status_html(api_ok, "API key configured"),
+                _status_html(music_non_empty, "Music collection has audio files"),
+                _status_html(
+                    playlist_match_ok,
+                    "Music collection matches mood_playlists_organized.json",
+                ),
+            ]
         )
-        status_label = QLabel("\n".join(status_lines))
+        status_label = QLabel(status_html)
         status_label.setWordWrap(True)
+        status_label.setTextFormat(Qt.RichText)
         status_label.setStyleSheet(
             f"""
             color: {title_color};
-            font-size: 13px;
+            font-size: 14px;
+            font-weight: 700;
             background: {status_bg};
             border: 1px solid {theme_tokens.BORDER_SUBTLE};
             border-radius: 10px;
@@ -376,7 +387,7 @@ class MainUI(QWidget):
             QDialog {{
                 background: {popup_bg};
                 border: 1px solid {theme_tokens.BORDER_SUBTLE};
-                border-radius: 12px;
+                border-radius: 0px;
             }}
             QPushButton {{
                 background: {btn_bg};
@@ -473,7 +484,7 @@ class MainUI(QWidget):
             QDialog {{
                 background: {theme_tokens.COLOR_BG_MAIN};
                 border: 1px solid {theme_tokens.BORDER_SUBTLE};
-                border-radius: 12px;
+                border-radius: 0px;
             }}
             """
         )

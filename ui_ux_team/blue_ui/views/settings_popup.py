@@ -124,7 +124,7 @@ class SettingsPopup(QWidget):
         super().__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
         self.setObjectName("SettingsPopup")
-        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setAutoFillBackground(False)
 
@@ -158,17 +158,25 @@ class SettingsPopup(QWidget):
             self.list.setCurrentRow(0)
 
         root_layout = QVBoxLayout(self)
-        root_layout.setContentsMargins(12, 10, 12, 10)
-        root_layout.setSpacing(10)
-        self.title_bar = PopupTitleBar("Settings", self)
-        root_layout.addWidget(self.title_bar)
+        root_layout.setContentsMargins(8, 8, 8, 8)
+        root_layout.setSpacing(0)
+
+        self._plate = QFrame(self)
+        self._plate.setObjectName("SettingsPlate")
+        root_layout.addWidget(self._plate, 1)
+
+        plate_layout = QVBoxLayout(self._plate)
+        plate_layout.setContentsMargins(12, 10, 12, 10)
+        plate_layout.setSpacing(10)
+        self.title_bar = PopupTitleBar("Settings", self._plate)
+        plate_layout.addWidget(self.title_bar)
 
         content_layout = QHBoxLayout()
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(12)
         content_layout.addWidget(self.list)
         content_layout.addWidget(self.stack)
-        root_layout.addLayout(content_layout)
+        plate_layout.addLayout(content_layout)
 
         grip_row = QHBoxLayout()
         grip_row.setContentsMargins(0, 0, 2, 2)
@@ -176,7 +184,7 @@ class SettingsPopup(QWidget):
         self._size_grip = QSizeGrip(self)
         self._size_grip.setToolTip("Resize")
         grip_row.addWidget(self._size_grip, 0, Qt.AlignRight | Qt.AlignBottom)
-        root_layout.addLayout(grip_row)
+        plate_layout.addLayout(grip_row)
 
         self.refresh_theme()
 
@@ -184,14 +192,18 @@ class SettingsPopup(QWidget):
         panel_bg = getattr(tokens, "COLOR_SETTINGS_BG", tokens.COLOR_BG_MAIN)
         panel_border = _with_alpha(tokens.BORDER_SUBTLE, 1.0)
         panel_outer = _with_alpha(tokens.BORDER_SUBTLE, 0.95)
-        input_bg = _with_alpha(tokens.BG_INPUT, 1.0)
-        input_focus_bg = _with_alpha(tokens.BG_INPUT, 1.0)
-        nav_bg = _with_alpha(tokens.BG_INPUT, 0.94)
-        stack_bg = _with_alpha(tokens.BG_INPUT, 0.98)
+        input_bg = tokens.BG_INPUT
+        input_focus_bg = tokens.BG_INPUT
+        nav_bg = tokens.BG_INPUT
+        stack_bg = tokens.BG_INPUT
 
         self.setStyleSheet(
             f"""
             QWidget#SettingsPopup {{
+                background: transparent;
+                border: none;
+            }}
+            QFrame#SettingsPlate {{
                 background-color: {panel_bg};
                 border: 1px solid {panel_outer};
                 border-radius: 14px;
