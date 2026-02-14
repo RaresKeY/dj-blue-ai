@@ -106,9 +106,25 @@ Available `run_preview.py` targets:
 - `transcript`
 - `widgets`
 - `covers`
+- `iter_cover_layout`
+- `cover_boxes`
+- `cover_titles`
 - `volume`
 - `timeline`
 - `theme`
+- `loading`
+
+UI iteration helper (scaffold test component + capture screenshots):
+```bash
+python3 ui_ux_team/blue_ui/previews/ui_iterate.py scaffold cover_alignment_probe
+python3 ui_ux_team/blue_ui/previews/ui_iterate.py snap \
+  --module ui_ux_team.blue_ui.previews.iteration.preview_cover_alignment_probe \
+  --class-name CoverAlignmentProbePreview
+```
+
+Default scaffold persistence paths:
+- component scaffold: `ui_ux_team/blue_ui/tests/iteration/dev/`
+- preview scaffold: `ui_ux_team/blue_ui/previews/iteration/`
 
 ## Testing
 Current UI smoke tests:
