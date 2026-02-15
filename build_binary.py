@@ -2,6 +2,7 @@ import PyInstaller.__main__
 import os
 import shutil
 from pathlib import Path
+import sys
 
 def build():
     # Define paths
@@ -51,6 +52,19 @@ def build():
         f"--add-data={mood_data_source}{os.pathsep}{mood_data_dest}",
     ]
 
+    icon_args = []
+    icon_root = base_dir / "ui_ux_team" / "assets" / "app_icons"
+    if sys.platform.startswith("win"):
+        candidate = icon_root / "windows" / "dj-blue-ai.ico"
+    elif sys.platform == "darwin":
+        candidate = icon_root / "macos" / "dj-blue-ai.icns"
+    else:
+        candidate = icon_root / "linux" / "512.png"
+    if candidate.exists():
+        icon_args.append(f"--icon={candidate}")
+    else:
+        print(f"Warning: platform icon not found, building without --icon: {candidate}")
+
     # PyInstaller arguments
     args = [
         str(entry_point),
@@ -61,7 +75,7 @@ def build():
         "--exclude-module=PyQt6",
         "--exclude-module=PyQt5",
         # "--log-level=WARN",
-    ] + hidden_imports + datas
+    ] + hidden_imports + datas + icon_args
 
     print("Starting PyInstaller build...")
     PyInstaller.__main__.run(args)

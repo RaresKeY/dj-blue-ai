@@ -1,9 +1,12 @@
 import json
+import os
 import re
 import sys
 import threading
 import time
 from pathlib import Path
+
+from architects.helpers.resource_path import resource_path
 
 
 # Ensure project root is importable when running directly.
@@ -28,6 +31,38 @@ def _runtime_base_dir() -> Path:
 
 def _settings_path() -> Path:
     return _runtime_base_dir() / "config" / "app_config.json"
+
+
+def _icon_relative_candidates() -> list[str]:
+    if sys.platform.startswith("win"):
+        platform_first = "ui_ux_team/assets/app_icons/windows/dj-blue-ai.ico"
+    elif sys.platform == "darwin":
+        platform_first = "ui_ux_team/assets/app_icons/macos/dj-blue-ai.icns"
+    else:
+        platform_first = "ui_ux_team/assets/app_icons/linux/512.png"
+    return [
+        platform_first,
+        "ui_ux_team/assets/app_icons/linux/512.png",
+        "ui_ux_team/assets/logo_margins.png",
+    ]
+
+
+def _apply_runtime_app_icon(app) -> None:
+    try:
+        from PySide6.QtGui import QIcon
+    except Exception:
+        return
+
+    for rel in _icon_relative_candidates():
+        candidate = Path(resource_path(rel))
+        if not candidate.exists():
+            continue
+        icon = QIcon(str(candidate))
+        if not icon.isNull():
+            app.setWindowIcon(icon)
+            if os.getenv("DJ_BLUE_ICON_DEBUG", "") == "1":
+                print(f"App icon set: {candidate}")
+            return
 
 
 def _read_selected_theme_key() -> str:
@@ -386,6 +421,7 @@ def run() -> int:
     def _create_qt_app():
         nonlocal app
         app = qt_app_factory(sys.argv)
+        _apply_runtime_app_icon(app)
 
     _run_step("Creating UI runtime...", 0.8, _create_qt_app)
 

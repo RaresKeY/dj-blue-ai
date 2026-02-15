@@ -41,6 +41,10 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
 
+    - name: Validate Platform Icon
+      run: |
+        python -c "import pathlib,sys; root=pathlib.Path('ui_ux_team/assets/app_icons'); exp=[root/'linux'/'512.png']; exp=[root/'windows'/'dj-blue-ai.ico'] if sys.platform.startswith('win') else ([root/'macos'/'dj-blue-ai.icns'] if sys.platform=='darwin' else exp); missing=[str(p) for p in exp if not p.exists()]; print('Expected icon(s):', ', '.join(str(p) for p in exp)); print('Missing icon(s):', ', '.join(missing) if missing else 'none'); sys.exit(1 if missing else 0)"
+
     - name: Build Binary
       run: |
         python -c "import pathlib,sys; p=pathlib.Path('ui_ux_team/blue_ui/app/main.py'); sys.exit(0 if p.exists() else 1)"

@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QPalette, QColor, QPixmap, QFont
+from PySide6.QtGui import QPalette, QColor, QPixmap, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -51,6 +51,37 @@ def get_project_root() -> Path:
 
 BASE = resource_path("ui_ux_team/assets")
 T_CHUNK = 30
+
+
+def _icon_relative_candidates() -> list[str]:
+    if sys.platform.startswith("win"):
+        platform_first = "ui_ux_team/assets/app_icons/windows/dj-blue-ai.ico"
+    elif sys.platform == "darwin":
+        platform_first = "ui_ux_team/assets/app_icons/macos/dj-blue-ai.icns"
+    else:
+        platform_first = "ui_ux_team/assets/app_icons/linux/512.png"
+    return [
+        platform_first,
+        "ui_ux_team/assets/app_icons/linux/512.png",
+        "ui_ux_team/assets/logo_margins.png",
+    ]
+
+
+def _resolve_window_icon() -> QIcon | None:
+    app = QApplication.instance()
+    if app is not None:
+        inherited = app.windowIcon()
+        if inherited is not None and not inherited.isNull():
+            return inherited
+
+    for rel in _icon_relative_candidates():
+        candidate = resource_path(rel)
+        if not os.path.exists(candidate):
+            continue
+        icon = QIcon(candidate)
+        if not icon.isNull():
+            return icon
+    return None
 
 
 def _parse_color(value: str, fallback: str) -> QColor:
@@ -105,6 +136,9 @@ class MainUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("DJ Blue UI")
+        icon = _resolve_window_icon()
+        if icon is not None:
+            self.setWindowIcon(icon)
         self.resize(721, 487)
         apply_native_titlebar_for_theme(self)
 
@@ -1193,6 +1227,9 @@ MainWindowView = MainUI
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    icon = _resolve_window_icon()
+    if icon is not None:
+        app.setWindowIcon(icon)
     window = MainUI()
     window.show()
     raise SystemExit(app.exec())
