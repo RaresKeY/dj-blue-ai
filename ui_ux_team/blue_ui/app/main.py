@@ -6,8 +6,6 @@ import threading
 import time
 from pathlib import Path
 
-from architects.helpers.resource_path import resource_path
-
 
 # Ensure project root is importable when running directly.
 if not getattr(sys, "frozen", False):
@@ -50,6 +48,7 @@ def _icon_relative_candidates() -> list[str]:
 def _apply_runtime_app_icon(app) -> None:
     try:
         from PySide6.QtGui import QIcon
+        from architects.helpers.resource_path import resource_path
     except Exception:
         return
 
