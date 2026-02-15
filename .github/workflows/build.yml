@@ -50,12 +50,21 @@ jobs:
         python -c "import pathlib,sys; p=pathlib.Path('ui_ux_team/blue_ui/app/main.py'); sys.exit(0 if p.exists() else 1)"
         python build_binary.py
 
+    - name: Build Linux AppImage
+      if: runner.os == 'Linux'
+      run: |
+        mkdir -p tools
+        curl -L -o tools/appimagetool.AppImage https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+        chmod +x tools/appimagetool.AppImage
+        APPIMAGETOOL=tools/appimagetool.AppImage python build_appimage.py
+
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: dj-blue-ai-${{ runner.os }}
         path: |
           dist/dj-blue-ai*
+          dist/*.AppImage
           !dist/*.spec
 
   release:
@@ -78,6 +87,7 @@ jobs:
     - name: Prepare Release Files
       run: |
         cp artifacts/dj-blue-ai-Linux/dj-blue-ai artifacts/dj-blue-ai-linux
+        cp artifacts/dj-blue-ai-Linux/dj-blue-ai-linux-*.AppImage artifacts/dj-blue-ai-linux.AppImage
         cp artifacts/dj-blue-ai-macOS/dj-blue-ai artifacts/dj-blue-ai-macos
         cp artifacts/dj-blue-ai-Windows/dj-blue-ai.exe artifacts/dj-blue-ai-windows.exe
 
@@ -86,6 +96,7 @@ jobs:
       with:
         files: |
           artifacts/dj-blue-ai-linux
+          artifacts/dj-blue-ai-linux.AppImage
           artifacts/dj-blue-ai-macos
           artifacts/dj-blue-ai-windows.exe
         draft: false

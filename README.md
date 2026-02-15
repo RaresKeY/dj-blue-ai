@@ -138,11 +138,16 @@ Local binary build:
 python build_binary.py
 ```
 
+Linux AppImage build (after binary build):
+```bash
+APPIMAGETOOL=tools/appimagetool.AppImage python build_appimage.py
+```
+
 CI/CD:
 - Workflow: `.github/workflows/build.yml`
 - Trigger: push tags matching `v*`
 - Platforms: Ubuntu, Windows, macOS
-- Artifacts: release binaries uploaded to GitHub Releases
+- Artifacts: release binaries uploaded to GitHub Releases (Linux binary + Linux AppImage + macOS binary + Windows exe)
 
 Example tag flow:
 ```bash
