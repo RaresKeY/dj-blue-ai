@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt, Signal, QTimer
+from PySide6.QtCore import QEvent, Qt, Signal, QTimer, QPropertyAnimation, QEasingCurve, QAbstractAnimation, QParallelAnimationGroup
 from PySide6.QtGui import QPalette, QColor, QPixmap, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -41,6 +41,7 @@ from ui_ux_team.blue_ui.widgets.song_cover_carousel import SongCoverCarousel
 from ui_ux_team.blue_ui.widgets.theme_chooser import ThemeChooserMenu
 from ui_ux_team.blue_ui.widgets.timeline import PlaybackTimeline
 from ui_ux_team.blue_ui.widgets.toast import FloatingToast
+from ui_ux_team.blue_ui.widgets.transcript_hint_arrow import TranscriptHintArrow
 from ui_ux_team.blue_ui.widgets.volume import IntegratedVolumeControl
 
 
@@ -162,6 +163,10 @@ class MainUI(QWidget):
         self._btn_prev = None
         self._btn_next = None
         self._btn_bluebird = None
+        self._transcript_hint_arrow = None
+        self._transcript_hint_anim = None
+        self._transcript_hint_dismissed = False
+        self._transcript_hint_initialized = False
         self._cover_carousel = None
         self._timeline = None
         self._timeline_dummy_duration = 240.0
@@ -184,6 +189,7 @@ class MainUI(QWidget):
         self.root = QVBoxLayout(self)
         self.root.setContentsMargins(0, 0, 0, 0)
         self.root.addWidget(self.build_main_layout())
+        self._ensure_transcript_hint_arrow()
 
         self.man_mem = ManagedMem()
         self._music_folder.mkdir(parents=True, exist_ok=True)
@@ -195,6 +201,7 @@ class MainUI(QWidget):
         self._transcript_win = TranscriptWindowView()
         self._transcript_win.closed.connect(lambda: setattr(self, "_show_transcript_window", False))
         self._transcript_win.record_clicked.connect(self.record_transcript)
+        self._transcript_win.set_recording_active(False)
         self._show_transcript_window = False
         self._install_focus_tracking(self)
         self._install_focus_tracking(self._transcript_win)
@@ -211,6 +218,76 @@ class MainUI(QWidget):
         else:
             print("Missing API Key, TranscriptionManager not initialized")
         QTimer.singleShot(600, self._show_start_cycle_popup_once)
+
+    def _ensure_transcript_hint_arrow(self):
+        if self._transcript_hint_arrow is not None and self._transcript_hint_anim is not None:
+            return
+
+        self._transcript_hint_arrow = TranscriptHintArrow(self)
+        self._transcript_hint_arrow.hide()
+
+        poke_anim = QPropertyAnimation(self._transcript_hint_arrow, b"poke_offset", self)
+        poke_anim.setDuration(1400)
+        poke_anim.setEasingCurve(QEasingCurve.InOutCubic)
+        poke_anim.setKeyValueAt(0.00, 0.0)
+        poke_anim.setKeyValueAt(0.40, 5.2)
+        poke_anim.setKeyValueAt(0.60, 1.5)
+        poke_anim.setKeyValueAt(1.00, 0.0)
+
+        peck_anim = QPropertyAnimation(self._transcript_hint_arrow, b"peck_angle", self)
+        peck_anim.setDuration(1400)
+        peck_anim.setEasingCurve(QEasingCurve.InOutCubic)
+        peck_anim.setKeyValueAt(0.00, 0.0)
+        peck_anim.setKeyValueAt(0.30, -6.2)
+        peck_anim.setKeyValueAt(0.48, 2.4)
+        peck_anim.setKeyValueAt(0.64, -1.2)
+        peck_anim.setKeyValueAt(1.00, 0.0)
+
+        self._transcript_hint_anim = QParallelAnimationGroup(self)
+        self._transcript_hint_anim.addAnimation(poke_anim)
+        self._transcript_hint_anim.addAnimation(peck_anim)
+        self._transcript_hint_anim.setLoopCount(-1)
+
+    def _position_transcript_hint_arrow(self):
+        if self._transcript_hint_arrow is None or self._btn_transcript is None:
+            return
+        if not self._btn_transcript.isVisible():
+            return
+
+        center = self._btn_transcript.mapTo(self, self._btn_transcript.rect().center())
+        tip_x = int(self._transcript_hint_arrow.width() * 0.865)
+        tip_y = int(self._transcript_hint_arrow.height() * 0.225)
+        target_x = center.x() - (self._btn_transcript.width() // 2) + 10
+        target_y = center.y()
+        x = target_x - tip_x
+        y = target_y - tip_y
+        x = max(8, x)
+        y = max(8, min(self.height() - self._transcript_hint_arrow.height() - 8, y))
+        self._transcript_hint_arrow.move(x, y)
+
+    def _show_transcript_hint_arrow(self):
+        if self._transcript_hint_dismissed:
+            return
+
+        self._ensure_transcript_hint_arrow()
+        self._position_transcript_hint_arrow()
+        self._transcript_hint_arrow.show()
+        self._transcript_hint_arrow.raise_()
+        if self._transcript_hint_anim is not None and self._transcript_hint_anim.state() != QAbstractAnimation.Running:
+            self._transcript_hint_anim.start()
+        self._transcript_hint_initialized = True
+
+    def _hide_transcript_hint_arrow(self, dismiss_permanently: bool = False):
+        if dismiss_permanently:
+            self._transcript_hint_dismissed = True
+        if self._transcript_hint_anim is not None:
+            self._transcript_hint_anim.stop()
+        if self._transcript_hint_arrow is not None:
+            self._transcript_hint_arrow.hide()
+
+    def _on_transcript_button_clicked(self):
+        self._hide_transcript_hint_arrow(dismiss_permanently=True)
+        self.open_transcript()
 
     def basic_music_play(self, music_path):
         real_path = self._resolve_music_path(music_path)
@@ -723,12 +800,14 @@ class MainUI(QWidget):
     def record_transcript(self):
         if not self.transcription_manager:
             print("TranscriptionManager not available (check API key)")
+            self._transcript_win.set_recording_active(False)
             return
 
         if not self.transcription_manager.is_recording():
             self.transcription_manager.start_recording()
         else:
             self.transcription_manager.stop_recording()
+        self._transcript_win.set_recording_active(self.transcription_manager.is_recording())
 
     def meet_type_menu(self, parent):
         if self._meet_type is None:
@@ -854,6 +933,11 @@ class MainUI(QWidget):
             if old_widget is not None:
                 old_widget.deleteLater()
         self.root.addWidget(self.build_main_layout())
+        self._ensure_transcript_hint_arrow()
+        if self._transcript_hint_dismissed:
+            self._hide_transcript_hint_arrow(dismiss_permanently=True)
+        else:
+            QTimer.singleShot(0, self._show_transcript_hint_arrow)
         if self._timeline is not None:
             self._timeline.refresh_theme()
         if self._settings_menu is not None:
@@ -883,7 +967,7 @@ class MainUI(QWidget):
 
         self._btn_transcript = self.button("assets/transcript_black.png", size=(60, 60))
         self._btn_transcript.setObjectName("btn_transcript")
-        self._btn_transcript.clicked.connect(self.open_transcript)
+        self._btn_transcript.clicked.connect(self._on_transcript_button_clicked)
         layout.addWidget(self._btn_transcript, alignment=Qt.AlignHCenter)
 
         self._btn_api = self.button("assets/api_black.png", size=(50, 50))
@@ -1291,6 +1375,16 @@ class MainUI(QWidget):
         if app is not None:
             app.quit()
         return super().closeEvent(event)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._transcript_hint_initialized and not self._transcript_hint_dismissed:
+            QTimer.singleShot(220, self._show_transcript_hint_arrow)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self._transcript_hint_arrow is not None and self._transcript_hint_arrow.isVisible():
+            self._position_transcript_hint_arrow()
 
 
 MainWindowView = MainUI

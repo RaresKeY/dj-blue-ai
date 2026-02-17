@@ -1,5 +1,5 @@
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
+from PySide6.QtCore import Signal, QTimer
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 
 from architects.helpers.resource_path import resource_path
 from ui_ux_team.blue_ui.theme import tokens
@@ -20,16 +20,26 @@ class TranscriptWindowView(QWidget):
         layout = QVBoxLayout(self)
         top_box = QHBoxLayout()
 
-        record_button = ImageButton(resource_path("ui_ux_team/assets/record_black.png"), size=(65, 65))
-        record_button.clicked.connect(self.record_clicked.emit)
+        self.record_button = ImageButton(resource_path("ui_ux_team/assets/record_black_off.png"), size=(65, 65))
+        self.record_button.clicked.connect(self.record_clicked.emit)
 
         self.search_bar = SearchBar()
         self.text_box = TextBox()
 
-        top_box.addWidget(record_button)
+        top_box.addWidget(self.record_button)
         top_box.addWidget(self.search_bar)
 
+        self.recording_status = QLabel("")
+        self.recording_status.setObjectName("recording_status")
+        self.recording_status.hide()
+        self._recording_status_base = "is recording"
+        self._recording_status_dots = 3
+        self._recording_status_timer = QTimer(self)
+        self._recording_status_timer.setInterval(360)
+        self._recording_status_timer.timeout.connect(self._tick_recording_status)
+
         layout.addLayout(top_box, 1)
+        layout.addWidget(self.recording_status, 0)
         layout.addWidget(self.text_box, 9)
         self.refresh_theme()
 
@@ -39,12 +49,38 @@ class TranscriptWindowView(QWidget):
     def set_search_query(self, query: str):
         self.search_bar.setPlainText(query)
 
+    def set_recording_active(self, is_active: bool):
+        icon = "assets/record_black.png" if is_active else "assets/record_black_off.png"
+        self.record_button.set_image(icon)
+        if is_active:
+            self._recording_status_dots = 3
+            self.recording_status.setText(self._recording_status_text())
+            self.recording_status.show()
+            if not self._recording_status_timer.isActive():
+                self._recording_status_timer.start()
+        else:
+            self._recording_status_timer.stop()
+            self.recording_status.hide()
+
+    def _recording_status_text(self) -> str:
+        return f"{self._recording_status_base}{'.' * self._recording_status_dots}"
+
+    def _tick_recording_status(self):
+        self._recording_status_dots = (self._recording_status_dots + 1) % 4
+        self.recording_status.setText(self._recording_status_text())
+
     def refresh_theme(self):
         self.setStyleSheet(
             f"""
             QWidget {{
                 background-color: {tokens.COLOR_BG_MAIN};
                 color: {tokens.TEXT_PRIMARY};
+            }}
+            QLabel#recording_status {{
+                color: {tokens.ACCENT};
+                font-size: 13px;
+                font-weight: 700;
+                padding: 0 4px 2px 8px;
             }}
             """
         )
