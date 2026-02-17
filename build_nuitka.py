@@ -49,16 +49,9 @@ def build() -> None:
     except FileNotFoundError as exc:
         raise RuntimeError("Nuitka is not installed in this environment.") from exc
 
-    env_file = base_dir / ".env"
-    if env_file.exists():
-        dist_items = [p for p in output_dir.glob("dj-blue-ai*") if p.is_dir()]
-        if dist_items:
-            shutil.copy(env_file, dist_items[0] / ".env")
-            print(f"Copied .env to {dist_items[0] / '.env'}")
-        else:
-            print("Warning: Nuitka output directory not found for .env copy.")
-    else:
-        print("Warning: .env file not found. Please create one next to the executable.")
+    # Do not copy .env into build outputs.
+    # API keys should be sourced from OS keychain at runtime.
+    print("Skipped .env copy for security. Use OS keychain or local runtime environment variables.")
 
     print("Nuitka build complete.")
 

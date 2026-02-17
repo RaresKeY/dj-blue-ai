@@ -81,14 +81,9 @@ def build():
     PyInstaller.__main__.run(args)
     print("Build complete.")
 
-    # Post-build actions: 
-    # Copy .env if it exists (for API key)
-    env_file = base_dir / ".env"
-    if env_file.exists():
-        shutil.copy(env_file, dist_dir / ".env")
-        print(f"Copied .env to {dist_dir / '.env'}")
-    else:
-        print("Warning: .env file not found. Please create one next to the executable.")
+    # Do not copy .env into build outputs.
+    # API keys should be sourced from OS keychain at runtime.
+    print("Skipped .env copy for security. Use OS keychain or local runtime environment variables.")
 
 if __name__ == "__main__":
     build()
