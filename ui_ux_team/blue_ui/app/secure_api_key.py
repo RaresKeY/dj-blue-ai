@@ -1,10 +1,15 @@
-import os
 import platform
 
 SERVICE_ID = "dj-blue-ai"
 PRIMARY_KEY = "AI_STUDIO_API_KEY"
 COMPAT_KEY = "AI_STUDIO"
 KEY_NAMES = (PRIMARY_KEY, COMPAT_KEY)
+RUNTIME_SOURCE_KEYRING = "keyring"
+RUNTIME_SOURCE_PROCESS_ENV = "process_env"
+RUNTIME_SOURCE_DOTENV = "dotenv"
+
+_RUNTIME_API_KEY = ""
+_RUNTIME_API_SOURCE = ""
 
 
 def backend_display_name() -> str:
@@ -26,13 +31,31 @@ def _import_keyring():
         return None, str(exc)
 
 
-def read_api_key():
-    env_key = os.getenv(PRIMARY_KEY, "").strip()
-    if env_key:
-        if not os.getenv(COMPAT_KEY):
-            os.environ[COMPAT_KEY] = env_key
-        return env_key, None
+def runtime_api_key() -> str:
+    return str(_RUNTIME_API_KEY or "").strip()
 
+
+def runtime_api_key_source() -> str:
+    return str(_RUNTIME_API_SOURCE or "").strip()
+
+
+def set_runtime_api_key(secret: str, source: str = "") -> None:
+    global _RUNTIME_API_KEY, _RUNTIME_API_SOURCE
+    cleaned = str(secret or "").strip()
+    if not cleaned:
+        clear_runtime_api_key()
+        return
+    _RUNTIME_API_KEY = cleaned
+    _RUNTIME_API_SOURCE = str(source or "").strip()
+
+
+def clear_runtime_api_key() -> None:
+    global _RUNTIME_API_KEY, _RUNTIME_API_SOURCE
+    _RUNTIME_API_KEY = ""
+    _RUNTIME_API_SOURCE = ""
+
+
+def read_api_key():
     keyring, import_error = _import_keyring()
     if keyring is None:
         return None, f"Keyring backend unavailable: {import_error}"
@@ -43,8 +66,7 @@ def read_api_key():
         except Exception as exc:
             return None, f"Could not read keyring: {exc}"
         if secret:
-            os.environ[PRIMARY_KEY] = secret
-            os.environ[COMPAT_KEY] = secret
+            set_runtime_api_key(secret, source=RUNTIME_SOURCE_KEYRING)
             return secret, None
 
     return None, None
@@ -65,16 +87,14 @@ def save_api_key(secret: str):
     except Exception as exc:
         return False, f"Could not save key to keyring: {exc}"
 
-    os.environ[PRIMARY_KEY] = cleaned
-    os.environ[COMPAT_KEY] = cleaned
+    set_runtime_api_key(cleaned, source=RUNTIME_SOURCE_KEYRING)
     return True, f"Saved API key to {backend_display_name()}."
 
 
 def clear_api_key():
     keyring, import_error = _import_keyring()
     if keyring is None:
-        os.environ.pop(PRIMARY_KEY, None)
-        os.environ.pop(COMPAT_KEY, None)
+        clear_runtime_api_key()
         return False, f"Keyring backend unavailable: {import_error}"
 
     try:
@@ -85,6 +105,5 @@ def clear_api_key():
     except Exception as exc:
         return False, f"Could not clear key from keyring: {exc}"
 
-    os.environ.pop(PRIMARY_KEY, None)
-    os.environ.pop(COMPAT_KEY, None)
+    clear_runtime_api_key()
     return True, f"Cleared API key from {backend_display_name()}."

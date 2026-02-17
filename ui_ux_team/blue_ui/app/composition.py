@@ -1,11 +1,18 @@
 import json
-import os
 from pathlib import Path
 
 from architects.helpers.gemini_chatbot import GeminiChatbot
 from architects.helpers.managed_mem import ManagedMem
 from architects.helpers.resource_path import resource_path
 from architects.helpers.transcription_manager import TranscriptionManager
+from ui_ux_team.blue_ui import settings as app_settings
+from ui_ux_team.blue_ui.app.secure_api_key import (
+    RUNTIME_SOURCE_DOTENV,
+    RUNTIME_SOURCE_PROCESS_ENV,
+    read_api_key as read_keyring_api_key,
+    runtime_api_key,
+    set_runtime_api_key,
+)
 from ui_ux_team.blue_ui.app.services import AppServices, default_player_factory
 from ui_ux_team.blue_ui.config import ensure_config_initialized
 from ui_ux_team.blue_ui.theme import ensure_default_theme
@@ -42,7 +49,19 @@ class AppComposer:
         return self.window
 
     def _build_services(self) -> AppServices:
-        api_key = os.getenv("AI_STUDIO_API_KEY")
+        api_key = runtime_api_key()
+        if not api_key:
+            api_key, _ = read_keyring_api_key()
+        if not api_key:
+            process_env_key = app_settings.read_process_api_key()
+            if process_env_key:
+                set_runtime_api_key(process_env_key, source=RUNTIME_SOURCE_PROCESS_ENV)
+                api_key = process_env_key
+        if not api_key:
+            dotenv_key, _ = app_settings.read_dotenv_api_key_if_allowed()
+            if dotenv_key:
+                set_runtime_api_key(dotenv_key, source=RUNTIME_SOURCE_DOTENV)
+                api_key = dotenv_key
         transcription = TranscriptionManager(api_key, chunk_seconds=30) if api_key else None
 
         mood_data_path = Path(resource_path("mood_readers/data/mood_playlists_organized.json"))

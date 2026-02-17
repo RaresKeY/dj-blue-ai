@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
@@ -27,6 +28,15 @@ from architects.helpers.miniaudio_player import MiniaudioPlayer
 from architects.helpers.resource_path import resource_path
 from architects.helpers.tabs_audio import get_display_names
 from architects.helpers.transcription_manager import TranscriptionManager
+from ui_ux_team.blue_ui import settings as app_settings
+from ui_ux_team.blue_ui.app.secure_api_key import (
+    RUNTIME_SOURCE_DOTENV,
+    RUNTIME_SOURCE_PROCESS_ENV,
+    clear_runtime_api_key,
+    read_api_key as read_keyring_api_key,
+    runtime_api_key,
+    set_runtime_api_key,
+)
 from ui_ux_team.blue_ui.config import default_music_folder, get_setting, set_setting
 from ui_ux_team.blue_ui.theme import set_theme
 from ui_ux_team.blue_ui.theme.native_window import apply_native_titlebar_for_theme
@@ -265,7 +275,7 @@ class MainUI(QWidget):
     def _sync_onboarding_hint_stage(self):
         if self._onboarding_arrow_guide is None:
             return
-        self._onboarding_arrow_guide.set_api_ready(bool(self.load_api_key()))
+        self._onboarding_arrow_guide.set_api_ready(bool(self.load_api_key(allow_prompt=False)))
 
     def _on_transcript_button_clicked(self):
         if self._onboarding_arrow_guide is not None:
@@ -743,10 +753,54 @@ class MainUI(QWidget):
         h, m = divmod(m, 60)
         return f"{h:02d}:{m:02d}:{s:02d}"
 
-    @staticmethod
-    def load_api_key():
-        from ui_ux_team.blue_ui import settings  # noqa: F401
-        return os.getenv("AI_STUDIO_API_KEY")
+    def _prompt_for_dotenv_fallback(self, env_path: Path) -> bool:
+        popup = QMessageBox(self)
+        popup.setWindowTitle("Enable .env API Key Fallback?")
+        popup.setIcon(QMessageBox.Question)
+        popup.setText("No API key was found in system keyring.")
+        popup.setInformativeText(
+            "For better security, .env fallback is disabled by default.\n\n"
+            f"Allow reading API key from:\n{env_path}"
+        )
+        popup.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        popup.setDefaultButton(QMessageBox.No)
+        choice = popup.exec()
+        allowed = choice == QMessageBox.Yes
+        app_settings.set_env_fallback_preference(allowed)
+        FloatingToast(self).show_message(".env fallback enabled" if allowed else ".env fallback disabled")
+        return allowed
+
+    def load_api_key(self, allow_prompt: bool = True) -> str:
+        cached = runtime_api_key()
+        if cached:
+            return cached
+
+        keyring_key, _ = read_keyring_api_key()
+        if keyring_key:
+            return keyring_key
+
+        process_env_key = app_settings.read_process_api_key()
+        if process_env_key:
+            set_runtime_api_key(process_env_key, source=RUNTIME_SOURCE_PROCESS_ENV)
+            return process_env_key
+
+        pref = app_settings.env_fallback_preference()
+        if pref == app_settings.ENV_FALLBACK_DENY:
+            return ""
+
+        dotenv_key, _ = app_settings.read_dotenv_api_key()
+        if not dotenv_key:
+            return ""
+
+        if pref != app_settings.ENV_FALLBACK_ALLOW:
+            if not allow_prompt or not self.isVisible():
+                return ""
+            if not self._prompt_for_dotenv_fallback(app_settings.dotenv_path()):
+                clear_runtime_api_key()
+                return ""
+
+        set_runtime_api_key(dotenv_key, source=RUNTIME_SOURCE_DOTENV)
+        return dotenv_key
 
     def open_transcript(self):
         if self._show_transcript_window is False:
@@ -1391,6 +1445,8 @@ class MainUI(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        if self.transcription_manager is None:
+            QTimer.singleShot(0, lambda: self._refresh_transcription_manager(initial=False))
         QTimer.singleShot(220, self._show_transcript_hint_arrow)
 
     def resizeEvent(self, event):

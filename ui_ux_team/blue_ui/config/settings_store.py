@@ -49,6 +49,7 @@ def default_config() -> dict[str, Any]:
     return {
         "selected_theme": "dark_theme",
         "music_folder": str(default_music_folder()),
+        "api_env_fallback_preference": "",
     }
 
 
@@ -65,6 +66,10 @@ def _normalized_config(raw: dict[str, Any] | None) -> dict[str, Any]:
     folder = raw.get("music_folder")
     if isinstance(folder, str) and folder.strip():
         out["music_folder"] = str(Path(folder).expanduser())
+
+    pref = str(raw.get("api_env_fallback_preference", "")).strip().lower()
+    if pref in {"allow", "deny"}:
+        out["api_env_fallback_preference"] = pref
 
     return out
 

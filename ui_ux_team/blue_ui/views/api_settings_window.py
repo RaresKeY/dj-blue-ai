@@ -2,7 +2,14 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, QLineEdit, QFrame
 
-from ui_ux_team.blue_ui.app.secure_api_key import backend_display_name, clear_api_key, read_api_key, save_api_key
+from ui_ux_team.blue_ui.app.secure_api_key import (
+    backend_display_name,
+    clear_api_key,
+    read_api_key,
+    runtime_api_key,
+    runtime_api_key_source,
+    save_api_key,
+)
 from ui_ux_team.blue_ui.theme import tokens
 from ui_ux_team.blue_ui.theme.native_window import apply_native_titlebar_for_theme
 
@@ -127,7 +134,16 @@ class APISettingsWindowView(QWidget):
         key, error = read_api_key()
         if key:
             masked = f"{key[:4]}...{key[-4:]}" if len(key) >= 8 else "***"
-            self._set_status(f"Stored key detected ({masked}).")
+            self._set_status(f"Stored key detected in keyring ({masked}).")
+            return
+        runtime_key = runtime_api_key()
+        if runtime_key:
+            masked = f"{runtime_key[:4]}...{runtime_key[-4:]}" if len(runtime_key) >= 8 else "***"
+            source = runtime_api_key_source() or "runtime"
+            self._set_status(
+                f"Runtime key active from {source} ({masked}). Not stored in keyring.",
+                is_error=False,
+            )
             return
         if error:
             self._set_status(f"No key available. {error}", is_error=True)

@@ -1,11 +1,12 @@
 # API Key Security Review (DJ Blue AI)
 Date: February 17, 2026
-Last Updated: February 17, 2026 (P0 remediation applied)
+Last Updated: February 17, 2026 (P0 + keyflow hardening applied)
 Reviewer: Codex (static code review)
 
 ## Change Log
 - 2026-02-17: Initial review published.
 - 2026-02-17: P0 remediation verified (`.env` copy removed from build scripts); findings and remediation plan updated.
+- 2026-02-17: Active Blue UI keyflow refactored to remove `os.environ` mutation and make `.env` fallback explicit/consent-based.
 
 ## Scope
 Reviewed API key handling across:
@@ -24,7 +25,9 @@ Reviewed API key handling across:
 - No hardcoded API secrets were found in tracked source files.
 - Primary key-management path uses OS keyring with `.env` fallback, which is good for developer ergonomics.
 - Previous highest-risk issue (build tooling copying `.env` into output folders) is remediated.
-- Current top risks are medium severity: broad propagation of key values into process environment variables and permissive fallback behavior in legacy/transcriber modules.
+- Active Blue UI path now avoids writing API keys into process environment variables.
+- `.env` fallback in active Blue UI path is now explicit (user consent popup + persisted preference).
+- Remaining notable risk is mostly in legacy/auxiliary paths (for example `transcribers/` provider fallback behavior).
 
 ## Findings
 
@@ -50,13 +53,13 @@ Recommendation:
 
 ### F-02: Secrets promoted to global `os.environ` and duplicated under compatibility key
 Severity: Medium
+Status: Resolved in active Blue UI path on February 17, 2026
 
-Evidence:
-- `ui_ux_team/blue_ui/app/secure_api_key.py:46`
-- `ui_ux_team/blue_ui/app/secure_api_key.py:47`
-- `ui_ux_team/blue_ui/app/secure_api_key.py:68`
-- `ui_ux_team/blue_ui/app/secure_api_key.py:69`
-- `ui_ux_team/blue_ui/settings.py:25`
+Post-fix evidence:
+- `ui_ux_team/blue_ui/app/secure_api_key.py:42` (runtime in-memory cache setter)
+- `ui_ux_team/blue_ui/app/secure_api_key.py:90` (keyring save updates runtime cache, not environment)
+- `ui_ux_team/blue_ui/settings.py:33` (process env is read-only input path)
+- `rg -n "os\\.environ\\[|os\\.environ\\.pop\\(" ui_ux_team/blue_ui -g'*.py'` returns no matches
 
 Why this matters:
 - Process environment variables are inherited by child processes by default.
@@ -72,12 +75,13 @@ Recommendation:
 
 ### F-03: `.env` fallback is loaded implicitly from runtime working context
 Severity: Medium
+Status: Mitigated in active Blue UI path on February 17, 2026
 
-Evidence:
-- `ui_ux_team/blue_ui/settings.py:22`
-- `ui_ux_team/blue_ui/views/main_window.py:747`
-- `README.md:14`
-- `README.md:20`
+Post-fix evidence:
+- `ui_ux_team/blue_ui/views/main_window.py:759` (explicit consent popup for dotenv fallback)
+- `ui_ux_team/blue_ui/views/main_window.py:787` (preference-gated fallback path)
+- `ui_ux_team/blue_ui/settings.py:18` (persisted allow/deny fallback preference)
+- `ui_ux_team/blue_ui/settings.py:54` (`.env` read is blocked unless explicitly allowed)
 
 Why this matters:
 - Implicit dotenv loading expands trust boundary to filesystem context.
@@ -139,9 +143,9 @@ Recommendation:
 - Removed `.env` copy behavior from `build_binary.py` and `build_nuitka.py`.
 - Build scripts now emit an explicit security message instead of copying secrets.
 
-2. P1 (short-term)
-- Refactor active key flow to avoid writing secrets into global environment variables except where strictly required.
-- Add production-mode switch to disable dotenv fallback.
+2. P1 (completed for active Blue UI path on February 17, 2026)
+- Refactored active key flow to avoid writing secrets into global environment variables.
+- Added explicit `.env` fallback consent popup and persisted allow/deny preference.
 
 3. P2 (medium-term)
 - Normalize user-facing error messages for keyring operations.
