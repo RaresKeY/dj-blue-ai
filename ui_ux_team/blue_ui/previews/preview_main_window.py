@@ -10,9 +10,15 @@ from ui_ux_team.blue_ui.theme import ensure_default_theme
 from ui_ux_team.blue_ui.views.main_window import MainWindowView
 
 
+class MainWindowPreview(MainWindowView):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("MainWindowPreview")
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     ensure_default_theme()
-    window = MainWindowView()
+    window = MainWindowPreview()
     window.show()
     raise SystemExit(app.exec())

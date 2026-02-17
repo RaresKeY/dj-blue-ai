@@ -1122,6 +1122,13 @@ class MainUI(QWidget):
         self._btn_next = self.button("assets/next.png", size=(35, 35))
         self._btn_next.setObjectName("btn_next")
         self._btn_next.clicked.connect(self.next_action)
+        nav_icon_tint = _resolve_contrast_text(
+            getattr(theme_tokens, "COLOR_BG_MAIN", "#1E1E1E"),
+            getattr(theme_tokens, "TEXT_PRIMARY", "#D4D4D4"),
+            4.5,
+        )
+        self._btn_prev.set_tint_color(nav_icon_tint)
+        self._btn_next.set_tint_color(nav_icon_tint)
 
         control_layer.addWidget(self._btn_prev, 0, Qt.AlignVCenter)
         control_layer.addWidget(self._play_btn, 0, Qt.AlignVCenter)

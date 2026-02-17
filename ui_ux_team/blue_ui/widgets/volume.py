@@ -1,5 +1,5 @@
 from PySide6.QtCore import Property, QPropertyAnimation, QTimer, Qt, Signal
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QSlider, QToolButton, QWidget
 
 from architects.helpers.resource_path import resource_path
@@ -75,6 +75,26 @@ class IntegratedVolumeControl(QWidget):
         self._apply_style()
         self._layout_children()
         self._sync_ui_from_state(emit=False)
+
+    @staticmethod
+    def _icon_tint_color() -> QColor:
+        parsed = QColor(str(getattr(tokens, "TEXT_PRIMARY", "#D4D4D4")).strip())
+        return parsed if parsed.isValid() else QColor("#D4D4D4")
+
+    def _tinted_volume_icon(self, icon_path: str) -> QIcon:
+        source = QPixmap(icon_path)
+        if source.isNull():
+            return QIcon()
+
+        tinted = QPixmap(source.size())
+        tinted.fill(Qt.transparent)
+        painter = QPainter(tinted)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.drawPixmap(0, 0, source)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        painter.fillRect(tinted.rect(), self._icon_tint_color())
+        painter.end()
+        return QIcon(tinted)
 
     def _apply_style(self):
         self.setStyleSheet(
@@ -162,7 +182,7 @@ class IntegratedVolumeControl(QWidget):
         self.slider.blockSignals(blocked)
 
         state = self._icon_state_for_volume(self._volume)
-        self.icon_button.setIcon(QIcon(QPixmap(self._icon_paths[state])))
+        self.icon_button.setIcon(self._tinted_volume_icon(self._icon_paths[state]))
 
         if emit:
             effective = 0.0 if self._muted else self._volume

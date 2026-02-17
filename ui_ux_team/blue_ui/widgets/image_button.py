@@ -1,6 +1,6 @@
 import os
 from PySide6.QtWidgets import QLabel
-from PySide6.QtGui import QPixmap, QCursor, QPainter, QPainterPath
+from PySide6.QtGui import QPixmap, QCursor, QPainter, QPainterPath, QColor
 from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve, Property
 
 from architects.helpers.resource_path import resource_path
@@ -31,6 +31,7 @@ class ImageButton(QLabel):
             self.base_pixmap = QPixmap(fallback)
 
         self._scale = 1.0
+        self._tint_color = None
         self.anim = QPropertyAnimation(self, b"scale_factor", self)
         self.anim.setDuration(120)
         self.anim.setEasingCurve(QEasingCurve.OutQuad)
@@ -49,6 +50,33 @@ class ImageButton(QLabel):
         self.base_pixmap = pm
         self.update()
 
+    def set_tint_color(self, color):
+        if color is None:
+            self._tint_color = None
+            self.update()
+            return
+
+        candidate = QColor(color) if not isinstance(color, QColor) else QColor(color)
+        self._tint_color = candidate if candidate.isValid() else None
+        self.update()
+
+    def _resolved_source_pixmap(self):
+        if self._tint_color is None:
+            return self.base_pixmap
+        if self.base_pixmap.isNull():
+            return self.base_pixmap
+
+        tinted = QPixmap(self.base_pixmap.size())
+        tinted.fill(Qt.transparent)
+
+        painter = QPainter(tinted)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        painter.drawPixmap(0, 0, self.base_pixmap)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        painter.fillRect(tinted.rect(), self._tint_color)
+        painter.end()
+        return tinted
+
     def set_corner_radius(self, radius: int):
         self._corner_radius = max(0, int(radius))
         self.update()
@@ -63,7 +91,8 @@ class ImageButton(QLabel):
     scale_factor = Property(float, get_scale, set_scale)
 
     def paintEvent(self, event):
-        if self.base_pixmap.isNull():
+        source_pixmap = self._resolved_source_pixmap()
+        if source_pixmap.isNull():
             return super().paintEvent(event)
 
         painter = QPainter(self)
@@ -78,7 +107,7 @@ class ImageButton(QLabel):
         painter.scale(self._scale, self._scale)
         painter.translate(-self.width() / 2, -self.height() / 2)
 
-        scaled = self.base_pixmap.scaled(inner_w, inner_h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        scaled = source_pixmap.scaled(inner_w, inner_h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         x = m.left() + (inner_w - scaled.width()) // 2
         y = m.top() + (inner_h - scaled.height()) // 2
 

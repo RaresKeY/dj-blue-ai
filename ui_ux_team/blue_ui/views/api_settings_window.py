@@ -1,9 +1,33 @@
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, QLineEdit, QFrame
 
 from ui_ux_team.blue_ui.app.secure_api_key import backend_display_name, clear_api_key, read_api_key, save_api_key
 from ui_ux_team.blue_ui.theme import tokens
 from ui_ux_team.blue_ui.theme.native_window import apply_native_titlebar_for_theme
+
+
+def _parse_color(value: str, fallback: str) -> QColor:
+    color = QColor((value or "").strip())
+    if color.isValid():
+        return color
+    fallback_color = QColor(fallback)
+    return fallback_color if fallback_color.isValid() else QColor("#FFFFFF")
+
+
+def _color_with_alpha(value: str, alpha: float, fallback: str) -> str:
+    c = _parse_color(value, fallback)
+    a = max(0.0, min(1.0, float(alpha)))
+    return f"rgba({c.red()}, {c.green()}, {c.blue()}, {a:.3f})"
+
+
+def _is_light_color(value: str, fallback: str = "#1E1E1E") -> bool:
+    return _parse_color(value, fallback).lightnessF() >= 0.55
+
+
+def _status_error_color(bg_color: str) -> str:
+    # Keep warning/error copy readable on both bright and dark backgrounds.
+    return "#B42318" if _is_light_color(bg_color, "#F3F3F3") else "#FF8A8A"
 
 
 class APISettingsWindowView(QWidget):
@@ -94,7 +118,7 @@ class APISettingsWindowView(QWidget):
 
     def _set_status(self, message: str, is_error: bool = False):
         self.status.setText(message)
-        accent = "#FF8A8A" if is_error else tokens.ACCENT
+        accent = _status_error_color(getattr(tokens, "COLOR_BG_MAIN", "#1E1E1E")) if is_error else tokens.ACCENT
         self.status.setStyleSheet(
             f"color: {accent}; font-size: 12px; font-weight: 600; padding-top: 2px;"
         )
@@ -124,11 +148,21 @@ class APISettingsWindowView(QWidget):
         self.refresh_status()
 
     def refresh_theme(self):
+        bg_main = getattr(tokens, "COLOR_BG_MAIN", "#1E1E1E")
+        accent = getattr(tokens, "ACCENT", "#FF9B54")
+        text_primary = getattr(tokens, "TEXT_PRIMARY", "#D4D4D4")
+        is_light_theme = _is_light_color(bg_main, "#1E1E1E")
+        button_bg_idle = _color_with_alpha(accent, 0.11 if is_light_theme else 0.14, accent)
+        button_bg_hover = _color_with_alpha(accent, 0.19 if is_light_theme else 0.24, accent)
+        button_border = _color_with_alpha(accent, 0.66 if is_light_theme else 0.62, accent)
+        hints_bg = _color_with_alpha(text_primary, 0.045 if is_light_theme else 0.03, text_primary)
+        placeholder = _color_with_alpha(getattr(tokens, "TEXT_MUTED", "#A9B1BA"), 0.72, "#A9B1BA")
+
         self.setStyleSheet(
             f"""
             QWidget {{
-                background-color: {tokens.COLOR_BG_MAIN};
-                color: {tokens.TEXT_PRIMARY};
+                background-color: {bg_main};
+                color: {text_primary};
             }}
             QLabel#apiSettingsTitle {{
                 font-size: 21px;
@@ -145,24 +179,27 @@ class APISettingsWindowView(QWidget):
             }}
             QLineEdit {{
                 background: {tokens.BG_INPUT};
-                color: {tokens.TEXT_PRIMARY};
+                color: {text_primary};
                 border: 1px solid {tokens.BORDER_SUBTLE};
                 border-radius: 8px;
                 padding: 8px 10px;
             }}
+            QLineEdit::placeholder {{
+                color: {placeholder};
+            }}
             QPushButton {{
-                background: rgba(255, 138, 61, 0.14);
-                color: {tokens.ACCENT};
-                border: 1px solid rgba(255, 138, 61, 0.62);
+                background: {button_bg_idle};
+                color: {accent};
+                border: 1px solid {button_border};
                 border-radius: 8px;
                 padding: 8px 12px;
                 font-weight: 600;
             }}
             QPushButton:hover {{
-                background: rgba(255, 138, 61, 0.24);
+                background: {button_bg_hover};
             }}
             QFrame#apiSettingsHints {{
-                background: rgba(255, 255, 255, 0.03);
+                background: {hints_bg};
                 border: 1px solid {tokens.BORDER_SUBTLE};
                 border-radius: 10px;
             }}
@@ -177,6 +214,7 @@ class APISettingsWindowView(QWidget):
             """
         )
         apply_native_titlebar_for_theme(self)
+        self.refresh_status()
 
     def closeEvent(self, event):
         self.closed.emit()
