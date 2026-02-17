@@ -8,6 +8,7 @@ from pathlib import Path
 TARGET_TO_FILE = {
     "main": "preview_main_window.py",
     "chat": "preview_chat_window.py",
+    "profile": "preview_profile_window.py",
     "transcript": "preview_transcript_window.py",
     "widgets": "preview_widgets.py",
     "covers": "preview_cover_carousel.py",

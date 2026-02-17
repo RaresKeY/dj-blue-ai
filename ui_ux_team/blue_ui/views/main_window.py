@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import QEvent, Qt, Signal, QTimer
 from PySide6.QtGui import QPalette, QColor, QPixmap, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -32,6 +32,7 @@ from ui_ux_team.blue_ui.theme import set_theme
 from ui_ux_team.blue_ui.theme.native_window import apply_native_titlebar_for_theme
 from ui_ux_team.blue_ui.theme import tokens as theme_tokens
 from ui_ux_team.blue_ui.views.chat_window import BlueBirdChatView
+from ui_ux_team.blue_ui.views.profile_window import ProfileWindowView
 from ui_ux_team.blue_ui.views.settings_popup import FloatingMenu, SettingsPopup
 from ui_ux_team.blue_ui.views.transcript_window import TranscriptWindowView
 from ui_ux_team.blue_ui.widgets.image_button import ImageButton, IMAGE_NOT_FOUND
@@ -148,6 +149,7 @@ class MainUI(QWidget):
         self._currently_playing = "deep_purple_smoke_on_the_water.wav"
         self._current_volume = 0.8
         self._bluebird_chat = None
+        self._profile_window = None
         self._settings_menu = None
         self._meet_type = None
         self._volume_control = None
@@ -177,6 +179,7 @@ class MainUI(QWidget):
         self._music_empty_popup = None
         self._startup_preflight_shown = False
         self._startup_cycle_popup = None
+        self._restoring_managed_windows = False
 
         self.root = QVBoxLayout(self)
         self.root.setContentsMargins(0, 0, 0, 0)
@@ -193,6 +196,8 @@ class MainUI(QWidget):
         self._transcript_win.closed.connect(lambda: setattr(self, "_show_transcript_window", False))
         self._transcript_win.record_clicked.connect(self.record_transcript)
         self._show_transcript_window = False
+        self._install_focus_tracking(self)
+        self._install_focus_tracking(self._transcript_win)
 
         self._current_session_segments = []
         self._current_session = f"SESSION [{self.man_mem.timestamp_helper()}]"
@@ -697,6 +702,24 @@ class MainUI(QWidget):
         self._transcript_win.hide()
         self._show_transcript_window = False
 
+    def open_profile_window(self):
+        if self._profile_window is None:
+            self._profile_window = ProfileWindowView()
+            self._profile_window.closed.connect(lambda: setattr(self, "_profile_window", None))
+            self._profile_window.resize(380, 460)
+            x = self.x() + max(0, (self.width() - self._profile_window.width()) // 2)
+            y = self.y() + 20
+            self._profile_window.move(x, y)
+            apply_native_titlebar_for_theme(self._profile_window)
+            self._install_focus_tracking(self._profile_window)
+            self._profile_window.show()
+            self._profile_window.raise_()
+            self._profile_window.activateWindow()
+            return
+
+        self._profile_window.close()
+        self._profile_window = None
+
     def record_transcript(self):
         if not self.transcription_manager:
             print("TranscriptionManager not available (check API key)")
@@ -819,6 +842,9 @@ class MainUI(QWidget):
         if self._bluebird_chat is not None:
             apply_native_titlebar_for_theme(self._bluebird_chat, theme_key)
             self._bluebird_chat.refresh_theme()
+        if self._profile_window is not None:
+            apply_native_titlebar_for_theme(self._profile_window, theme_key)
+            self._profile_window.refresh_theme()
         if self._meet_type is not None:
             apply_native_titlebar_for_theme(self._meet_type, theme_key)
             self._meet_type.refresh_theme()
@@ -878,6 +904,7 @@ class MainUI(QWidget):
 
         self._btn_user = self.button("assets/user_black.png", size=(60, 60))
         self._btn_user.setObjectName("btn_user")
+        self._btn_user.clicked.connect(self.open_profile_window)
         layout.addWidget(self._btn_user, alignment=Qt.AlignHCenter)
 
         self._btn_settings = self.button("assets/settings_black.png", size=(50, 50))
@@ -1033,6 +1060,7 @@ class MainUI(QWidget):
             self._bluebird_chat.move(x - 10, y)
             self._bluebird_chat.resize(400, self.height())
             apply_native_titlebar_for_theme(self._bluebird_chat)
+            self._install_focus_tracking(self._bluebird_chat)
             self._bluebird_chat.show()
             return
 
@@ -1090,6 +1118,43 @@ class MainUI(QWidget):
         position = self._player.position_seconds() if hasattr(self._player, "position_seconds") else 0.0
         self._timeline.set_duration(duration)
         self._timeline.set_position(position)
+
+    def _install_focus_tracking(self, window: QWidget | None) -> None:
+        if window is not None:
+            window.installEventFilter(self)
+
+    def _managed_windows(self) -> list[QWidget]:
+        windows = [self]
+        if self._show_transcript_window and self._transcript_win is not None:
+            windows.append(self._transcript_win)
+        if self._profile_window is not None:
+            windows.append(self._profile_window)
+        if self._bluebird_chat is not None:
+            windows.append(self._bluebird_chat)
+        return windows
+
+    def _restore_open_managed_windows(self, active_window: QWidget | None = None) -> None:
+        if self._restoring_managed_windows:
+            return
+        self._restoring_managed_windows = True
+        try:
+            windows = self._managed_windows()
+            for window in windows:
+                if window.isMinimized():
+                    window.showNormal()
+                elif not window.isVisible():
+                    window.show()
+                window.raise_()
+            if active_window is not None and active_window in windows:
+                active_window.raise_()
+                active_window.activateWindow()
+        finally:
+            self._restoring_managed_windows = False
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.WindowActivate and watched in self._managed_windows():
+            self._restore_open_managed_windows(active_window=watched)
+        return super().eventFilter(watched, event)
 
     def build_main_bottom_panel(self):
         bottom_con = self.color_box("transparent")
@@ -1220,6 +1285,12 @@ class MainUI(QWidget):
         container = QWidget()
         container.setLayout(h)
         return container
+
+    def closeEvent(self, event):
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
+        return super().closeEvent(event)
 
 
 MainWindowView = MainUI

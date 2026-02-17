@@ -61,6 +61,8 @@ class TestBlueUIButtonClicks(unittest.TestCase):
             self.window._meet_type.close()
         if self.window._bluebird_chat is not None:
             self.window._bluebird_chat.close()
+        if self.window._profile_window is not None:
+            self.window._profile_window.close()
         self.window._transcript_win.close()
         self.window.close()
         self._tmp_music_dir.cleanup()
@@ -88,6 +90,9 @@ class TestBlueUIButtonClicks(unittest.TestCase):
 
         self._click(self.window._btn_api)
         self._click(self.window._btn_user)
+        self.assertIsNotNone(self.window._profile_window)
+        self._click(self.window._btn_user)
+        self.assertIsNone(self.window._profile_window)
 
     def test_transport_buttons_click_without_crash(self):
         self.assertIsNone(self.window._player)
