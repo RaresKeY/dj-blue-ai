@@ -93,7 +93,7 @@ class BlueBirdChatView(QWidget):
         self.refresh_theme()
 
         if self.api_key:
-            self.chatbot = GeminiChatbot(self.api_key)
+            self.chatbot = GeminiChatbot(self.api_key, model_name="gemini-3-flash-preview")
             transcript = self.initial_transcript or "System: This is the start of the session."
             self.text_box.append_message("system", "*Initializing BlueBird AI context...*")
             self.set_input_enabled(False)
