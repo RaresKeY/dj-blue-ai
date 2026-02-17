@@ -38,7 +38,8 @@ class ChatInitWorker(QThread):
     def run(self):
         try:
             success = self.chatbot.load_context(self.transcript)
-            self.init_finished.emit(bool(success), "Context loaded." if success else "Failed to load context.")
+            message = "Context loaded." if success else (self.chatbot.last_error or "Failed to load context.")
+            self.init_finished.emit(bool(success), message)
         except Exception as e:  # noqa: BLE001
             self.init_finished.emit(False, str(e))
 
@@ -54,7 +55,8 @@ class ContextUpdateWorker(QThread):
     def run(self):
         try:
             success = self.chatbot.update_context_with_file(self.file_path)
-            self.update_finished.emit(bool(success), "Context loaded." if success else "Failed to load context.")
+            message = "Context loaded." if success else (self.chatbot.last_error or "Failed to load context.")
+            self.update_finished.emit(bool(success), message)
         except Exception as e:  # noqa: BLE001
             self.update_finished.emit(False, str(e))
 

@@ -19,7 +19,12 @@ class GeminiChatbot:
     A generic, plug-and-play chatbot component wrapping Google's GenAI SDK
     with Context Caching support.
     """
-    def __init__(self, api_key: str, model_name: str = "gemini-3-pro-preview", system_instruction: str = DEFAULT_SYSTEM_INSTRUCTION):
+    def __init__(
+        self,
+        api_key: str,
+        model_name: str = "models/gemini-2.5-flash-lite",
+        system_instruction: str = DEFAULT_SYSTEM_INSTRUCTION,
+    ):
         """
         Initialize the Gemini Chatbot.
 
@@ -29,16 +34,43 @@ class GeminiChatbot:
             system_instruction (str): System prompt to guide the model's behavior.
         """
         self.api_key = api_key
-        self.model_name = model_name
+        self.model_name = self._normalize_model_name(model_name)
         self.system_instruction = system_instruction
         self.cache = None
         self.model = None
         self.chat_session = None
         self.current_transcript = ""
+        self.last_error = ""
         
         # Configure the API globally for this process
         if self.api_key:
             genai.configure(api_key=self.api_key)
+
+    @staticmethod
+    def _normalize_model_name(model_name: str) -> str:
+        if model_name.startswith("models/"):
+            return model_name
+        return f"models/{model_name}"
+
+    @staticmethod
+    def _build_transcript_history(transcript_text: str) -> typing.List[dict]:
+        cleaned = (transcript_text or "").strip()
+        if not cleaned:
+            return []
+
+        return [
+            {
+                "role": "user",
+                "parts": [
+                    "Use the following transcript as the primary context for this session.\n\n"
+                    f"TRANSCRIPT:\n{cleaned}"
+                ],
+            },
+            {
+                "role": "model",
+                "parts": ["Understood. I will prioritize the transcript context in my responses."],
+            },
+        ]
 
     def update_context_with_file(self, file_path: str) -> bool:
         """
@@ -52,6 +84,7 @@ class GeminiChatbot:
             bool: True if successful, False otherwise.
         """
         try:
+            self.last_error = ""
             with open(file_path, 'r', encoding='utf-8') as f:
                 new_content = f.read()
             
@@ -60,7 +93,8 @@ class GeminiChatbot:
 
             return self.load_context(self.current_transcript)
         except Exception as e:
-            print(f"Error updating context from file: {e}")
+            self.last_error = f"Error updating context from file: {e}"
+            print(self.last_error)
             return False
 
     def load_context(self, transcript_text: str, ttl_minutes: int = 10) -> bool:
@@ -75,30 +109,49 @@ class GeminiChatbot:
         Returns:
             bool: True if successful, False otherwise.
         """
+        self.last_error = ""
+        self.current_transcript = transcript_text or ""
+        transcript_for_cache = self.current_transcript.strip()
+        cache_error = None
+
+        self.cache = None
+        self.model = None
+        self.chat_session = None
+
+        # Try context caching first when transcript has meaningful content.
+        if len(transcript_for_cache) >= 1000:
+            try:
+                print(f"--- Creating Context Cache (Model: {self.model_name}) ---")
+                self.cache = caching.CachedContent.create(
+                    model=self.model_name,
+                    display_name='transcript_cache',
+                    system_instruction=self.system_instruction,
+                    contents=[self.current_transcript],
+                    ttl=datetime.timedelta(minutes=ttl_minutes)
+                )
+                self.model = genai.GenerativeModel.from_cached_content(cached_content=self.cache)
+                self.start_new_chat()
+                return True
+            except Exception as e:
+                cache_error = e
+
+        # Fallback to non-cached chat so BlueBird still works when cache creation fails.
         try:
-            print(f"--- Creating Context Cache (Model: {self.model_name}) ---")
-            
-            self.current_transcript = transcript_text
-            
-            # Create the cache
-            # Note: Display name is optional, using a generic one here
-            self.cache = caching.CachedContent.create(
-                model=self.model_name,
-                display_name='transcript_cache', 
+            self.model = genai.GenerativeModel(
+                model_name=self.model_name,
                 system_instruction=self.system_instruction,
-                contents=[transcript_text],
-                ttl=datetime.timedelta(minutes=ttl_minutes)
             )
-            
-            # Initialize the model from the cache
-            self.model = genai.GenerativeModel.from_cached_content(cached_content=self.cache)
-            
-            # Start a new chat session
-            self.start_new_chat()
-            
+            history = self._build_transcript_history(self.current_transcript)
+            self.start_new_chat(history=history)
+            if cache_error:
+                print(f"Context cache unavailable, continuing without cache: {cache_error}")
             return True
         except Exception as e:
-            print(f"Error loading context: {e}")
+            if cache_error:
+                self.last_error = f"Cache init failed ({cache_error}); fallback init failed ({e})"
+            else:
+                self.last_error = f"Error loading context: {e}"
+            print(self.last_error)
             return False
 
     def start_new_chat(self, history: typing.List[dict] = None):
