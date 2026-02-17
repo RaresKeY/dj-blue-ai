@@ -1,12 +1,7 @@
 import os
-import platform
-if platform.system() == "Linux":    
-    import keyring
 from dotenv import load_dotenv
 
-# --- CONFIGURATION ---
-SERVICE_ID = "dj-blue-ai"
-KEYS_TO_FETCH = ["AI_STUDIO", "AI_STUDIO_API_KEY"]
+from ui_ux_team.blue_ui.app.secure_api_key import COMPAT_KEY, PRIMARY_KEY, read_api_key
 
 def init_env():
     """
@@ -16,24 +11,18 @@ def init_env():
     """
     print("--- Loading Configuration ---")
 
-    # 1. Try to inject from Keyring (Your Secure Workflow)
-    for key_name in KEYS_TO_FETCH:
-        try:
-            # Attempt to fetch from Seahorse
-            secret = keyring.get_password(SERVICE_ID, key_name)
-
-            if secret:
-                # Inject into RAM (Environment Variable)
-                os.environ[key_name] = secret
-                print(f"✅ Loaded {key_name} from System Keyring")
-        except Exception as e:
-            # If keyring fails/isn't set up, just ignore it
-            pass
+    # 1. Try to inject from OS Keychain (Seahorse / Keychain / Credential Manager).
+    secret, _ = read_api_key()
+    if secret:
+        print(f"✅ Loaded {PRIMARY_KEY} from System Keychain")
 
     # 2. Run load_dotenv (Teammate's Workflow)
     # By default, override=False. It will NOT overwrite what we just set from Keyring.
     # It will only fill in gaps from the .env file.
     load_dotenv()
+    env_key = os.getenv(PRIMARY_KEY, "").strip()
+    if env_key and not os.getenv(COMPAT_KEY):
+        os.environ[COMPAT_KEY] = env_key
 
 # Run the initialization immediately when this module is imported
 init_env()

@@ -10,10 +10,13 @@ TARGET_TO_FILE = {
     "chat": "preview_chat_window.py",
     "profile": "preview_profile_window.py",
     "transcript": "preview_transcript_window.py",
+    "api": "preview_api_settings_window.py",
+    "api_flow": "preview_api_settings_flow.py",
     "widgets": "preview_widgets.py",
     "covers": "preview_cover_carousel.py",
     "iter_cover_layout": "iteration/preview_cover_segment_layout_boxes.py",
     "iter_cover_vertical_slips": "iteration/preview_cover_segment_vertical_slips_layout.py",
+    "iter_api_keyring": "iteration/preview_api_settings_keyring_setup.py",
     "iter_arrow_standalone": "iteration/preview_transcript_hint_arrow_standalone.py",
     "cover_boxes": "preview_cover_layout_boxes.py",
     "cover_titles": "preview_cover_song_titles.py",
@@ -22,6 +25,7 @@ TARGET_TO_FILE = {
     "theme": "preview_theme_chooser.py",
     "loading": "preview_loading_screen.py",
     "arrow": "preview_transcript_hint_arrow.py",
+    "onboarding_arrow_logic": "preview_onboarding_arrow_logic.py",
 }
 
 
