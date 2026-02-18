@@ -5,12 +5,11 @@ Replace deprecated `google.generativeai` usage with the supported `google.genai`
 
 ## Baseline Check (2026-02-18)
 Command run:
-- `timeout 10 .venv/bin/python architects/main.py` (Success - app launches)
-- `timeout 10 .venv/bin/python main.py` (Failure - Legacy headless entry point broken)
+- `timeout 10 .venv/bin/python main.py` (Success - app launches via shim)
+- `timeout 10 .venv/bin/python ui_ux_team/blue_ui/app/main.py` (Success - app launches directly)
 
 Observed output for `main.py`:
-1. `ImportError: cannot import name 'RECORD_SECONDS' from 'the_listeners'`
-2. Deprecation warning from `google.generativeai` in `architects/helpers/api_utils.py`.
+1. Deprecation warning from `google.generativeai` in `architects/helpers/api_utils.py`.
 
 ## In-Scope Files (current deprecated SDK usage)
 - `architects/helpers/api_utils.py`

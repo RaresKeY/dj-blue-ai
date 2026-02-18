@@ -8,7 +8,7 @@ PySide6 desktop app for mood-aware meeting assist, music playback, transcript ca
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python ui_ux_team/blue_ui/app/main.py
+python main.py
 ```
 
 Optional API key for transcription/chat (`.env` in repo root):

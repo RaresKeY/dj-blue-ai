@@ -8,7 +8,7 @@
 - **Secrets**: Add `.env` with `AI_STUDIO_API_KEY=<key>` or use the app's settings window to save it to the system keyring.
 
 ## Run the App
-- **Launch**: `python architects/main.py` (shim) or `python ui_ux_team/blue_ui/app/main.py`.
+- **Launch**: `python main.py` (shim) or `python ui_ux_team/blue_ui/app/main.py`.
 - **Main Window**: Shows music playback controls, interactive carousel, mood marquee, and sidebar buttons.
 - **Transcript**: Open via sidebar; hit the record button to start/stop capture and transcription.
 - **BlueBird Chat**: AI assistant that answers questions based on the current transcript.
