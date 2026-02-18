@@ -1,18 +1,21 @@
-# Team Onboarding (py_learn)
+# Team Onboarding (Blue UI)
+
+- **Last Updated: 2026-02-18**
 
 ## Setup
-- Python 3.12+ recommended. Create a venv and install deps: `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`.
-- Desktop requirements: Qt (PySide6 wheels), `pyaudio`, and PulseAudio/PipeWire `parec` for speaker capture (Linux).
-- Secrets: add `.env` with `AI_STUDIO_API_KEY=<key>` (loaded in `ui_ux_team/prototype_r/py_learn.py:934-939`).
+- **Python 3.12+** recommended. Create a venv and install deps: `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`.
+- **Desktop Requirements**: Qt (PySide6), `pyaudio`, `miniaudio`, and `pw-record` (Linux) for speaker capture.
+- **Secrets**: Add `.env` with `AI_STUDIO_API_KEY=<key>` or use the app's settings window to save it to the system keyring.
 
 ## Run the App
-- Launch: `python ui_ux_team/prototype_r/py_learn.py`. The main window shows playback controls, mood marquee, and sidebar buttons.
-- Transcript window: open via sidebar transcript icon; hit the record button to start/stop capture and remote transcription.
-- BlueBird chat: open via the blue bird button; currently echoes input locally.
+- **Launch**: `python architects/main.py` (shim) or `python ui_ux_team/blue_ui/app/main.py`.
+- **Main Window**: Shows music playback controls, interactive carousel, mood marquee, and sidebar buttons.
+- **Transcript**: Open via sidebar; hit the record button to start/stop capture and transcription.
+- **BlueBird Chat**: AI assistant that answers questions based on the current transcript.
 
 ## Where Things Are
-- Flow summary: `architects/design_docs/py_learn_flow.md`.
-- Components:
+- **Flow Summary**: `architects/design_docs/blue_ui_flow.md`
+- **Components**:
   - `architects/design_docs/component_main_ui.md`
   - `architects/design_docs/component_transcript_window.md`
   - `architects/design_docs/component_bluebird_chat.md`
@@ -22,11 +25,12 @@
   - `architects/design_docs/component_ui_widgets.md`
 
 ## Data & Limits
-- Transcripts are persisted to `managed_mem.json` via `ManagedMem` (JSON file at repo root).
-- API calls go through Gemini; keep TPM in mind (≈5K TPM mentioned). Audio uploads can be ~5 MB per chunk—consider downmixing/compression when experimenting.
+- **Persistence**: Managed via `architects/helpers/managed_mem.py`.
+- **API Guard**: Usage limits and cost tracking in `ui_ux_team/blue_ui/app/api_usage_guard.py`.
+- **Audio Chunks**: 30-second PCM chunks are analyzed locally with `librosa` before being sent to Gemini.
 
 ## First Contributions
-- Add UI features by extending `MainUI.build_sidebar` or bottom controls (`ui_ux_team/prototype_r/py_learn.py:1074-1198`).
-- Adjust transcription cadence inside `transcript_worker` (`ui_ux_team/prototype_r/py_learn.py:991-1023`).
-- For local processing experiments, swap `LLMUtilitySuite.transcribe_audio` with a local ASR call and keep the emission to `transcript_ready`.
+- **UI Features**: Extend `MainWindowView` in `ui_ux_team/blue_ui/views/main_window.py`.
+- **Backend Services**: Check `AppComposer` and `AppServices` in `ui_ux_team/blue_ui/app/composition.py`.
+- **New Widgets**: Add to `ui_ux_team/blue_ui/widgets/`.
 

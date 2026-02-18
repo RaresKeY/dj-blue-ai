@@ -1,5 +1,7 @@
 # Nuitka Build Plan (DJ Blue AI)
 
+- **Last Updated: 2026-02-18**
+
 ## Objective
 Introduce a Nuitka-based build pipeline for Linux, Windows, and macOS while preserving current release behavior and icon/asset packaging.
 

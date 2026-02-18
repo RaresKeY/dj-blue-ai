@@ -1,5 +1,7 @@
 # PyInstaller + AppImage Plan (Linux)
 
+- **Last Updated: 2026-02-18**
+
 ## Goal
 Add Linux AppImage packaging on top of the current PyInstaller flow, without removing existing release artifacts.
 

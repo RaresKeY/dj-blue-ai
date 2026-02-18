@@ -1,21 +1,24 @@
 # UI Widget Set
 
-- Path: `ui_ux_team/prototype_r/py_learn.py`
-- Purpose: Reusable Qt widgets for buttons, marquees, popups, and notifications.
+- **Last Updated: 2026-02-18**
+- **Path**: `ui_ux_team/blue_ui/widgets/`
+- **Purpose**: Reusable Qt widgets for buttons, marquees, carousels, and interactive UI components.
 
 ## Key Widgets
-- `ImageButton` (`ui_ux_team/prototype_r/py_learn.py:82-204`): QLabel-based image button with hover/press animations. Use `ImageButton(path, size=(w,h), fallback=IMAGE_NOT_FOUND)` and connect `clicked`.
-- `MarqueeLabel` / `QueuedMarqueeLabel` (`ui_ux_team/prototype_r/py_learn.py:206-323`): Scrolling text; `QueuedMarqueeLabel` cycles through a queue with fade transitions. Configure `step`, `interval_ms`, `gap`, `hold_ms`.
-- `FloatingToast` (`ui_ux_team/prototype_r/py_learn.py:324-419`): Animated toast that rises and fades. Call `show_message(text, duration_ms=2200, bottom_band_ratio=0.3)`.
-- `PopupTitleBar` + `SettingsPopup` (`ui_ux_team/prototype_r/py_learn.py:421-477`): Frameless popup scaffold with category list and stacked content; populate with dict of tab widgets.
-- `FloatingMenu` (`ui_ux_team/prototype_r/py_learn.py:606-656`): Simple popup menu anchored to a parent position; emits `closed`.
-- `VolumePopup` & `VolumeButton` (`ui_ux_team/prototype_r/py_learn.py`):
-    - `VolumeButton`: Extends `ImageButton` to support drag interaction signals (`interaction_start`, `interaction_move`, `interaction_end`).
-    - `VolumePopup`: A frameless slider window designed to be positioned relative to the button. Supports vertical sliding volume control (0.0 - 1.0).
-- Styled text boxes: `TextBoxAI` (`ui_ux_team/prototype_r/py_learn.py:544-573`), `TextBox` (`ui_ux_team/prototype_r/py_learn.py:680-722`), `SearchBar` (`ui_ux_team/prototype_r/py_learn.py:806-838`).
+- **ImageButton** (`image_button.py`): QLabel-based image button with hover/press animations and optional tinting.
+- **QueuedMarqueeLabel** (`marquee.py`): Scrolling text widget that cycles through a queue with fade transitions.
+- **SongCoverCarousel** (`song_cover_carousel.py`): Interactive 3D-like carousel for selecting and playing music tracks.
+- **PlaybackTimeline** (`timeline.py`): Seekable progress bar for music playback with duration/position display.
+- **IntegratedVolumeControl** (`volume.py`): Combined volume button and slider popup for software volume adjustment.
+- **FloatingToast** (`toast.py`): Animated notification that rises and fades from the bottom of the window.
+- **OnboardingArrowGuide** (`onboarding_arrow_guide.py` / `transcript_hint_arrow.py`): Animated arrows to guide users through the initial setup (e.g., setting API key).
+- **LoadingCircle** (`loading.py`): Animated spinner for indicating background API or processing tasks.
+- **ThemeChooserMenu** (`theme_chooser.py`): Dropdown or grid menu for selecting application themes.
+- **TextBox / TextBoxAI / SearchBar** (`text_boxes.py`): Styled text areas for chat, transcripts, and input.
 
 ## Usage Tips
-- Button factory: `MainUI.button("assets/icon.png", size=(40,40))` returns an `ImageButton` with fallbacks (`ui_ux_team/prototype_r/py_learn.py:1298-1310`).
-- For popups anchored to another widget, map the global position (`parent.mapToGlobal`) similar to `MainUI.meet_type_menu` (`ui_ux_team/prototype_r/py_learn.py:1025-1044`).
-- Keep asset paths relative to `ui_ux_team/prototype_r/` or pass absolute paths to avoid missing icons.
+- **Button Factory**: Use `MainUI.button("assets/icon.png", size=(40,40))` for consistent styling and fallbacks.
+- **Theme Awareness**: Most widgets implement a `refresh_theme()` method to update colors and styles from `tokens.py`.
+- **Global Positioning**: For popups like `FloatingMenu` or `SettingsPopup`, use `parent.mapToGlobal()` to anchor to specific UI elements.
+- **Asset Paths**: Use `architects.helpers.resource_path.resource_path()` to resolve asset locations, especially for bundled applications.
 

@@ -1,14 +1,21 @@
 # BlueBirdChat
 
-- Path: `ui_ux_team/prototype_r/py_learn.py:840-878` (`InputBlueBird` at `ui_ux_team/prototype_r/py_learn.py:755-803`, `TextBoxAI` at `ui_ux_team/prototype_r/py_learn.py:544-573`)
-- Purpose: Simple chat stub with send button + input box; currently echoes messages locally.
+- **Last Updated: 2026-02-18**
+- **Path**: `ui_ux_team/blue_ui/views/chat_window.py`
+- **Purpose**: AI chat assistant that uses the current transcript (or an uploaded file) as context for answering user queries.
 
 ## Usage
-- Construct and show via `MainUI.open_bluebird_chat` (`ui_ux_team/prototype_r/py_learn.py:1200-1217`).
-- Wire outbound messages by connecting `InputBlueBird.message_sent` to a handler; default handler appends to `TextBoxAI`.
-- To integrate with an LLM, replace `handle_message` to call your API and render the response to `text_box`.
+- Construct and show via `MainUI.open_bluebird_chat()`.
+- Uses `GeminiChatbot` (`architects/helpers/gemini_chatbot.py`) for LLM interaction and context caching.
+- Context is initialized with the current transcript from `TranscriptWindowView`.
+
+## Key Features
+- **Context Caching**: Uses Google GenAI's `CachedContent` for transcripts > 1000 characters to reduce latency and cost.
+- **Background Workers**: `ChatInitWorker`, `ChatWorker`, and `ContextUpdateWorker` ensure the UI remains responsive during API calls.
+- **File Loading**: Supports loading external `.txt` files to update the chat context via `open_file_picker()`.
 
 ## Notes
-- Styling is dark-themed; adjust in `InputBlueBird.style_settings` and `TextBoxAI` CSS blocks if needed.
-- The widget is independent of transcript flow; it can be reused in other windows if you pass a target text box.
+- **Models**: Defaults to `models/gemini-3-flash-preview` (configurable in `BlueBirdChatView`).
+- **Styling**: Uses tokens from `ui_ux_team/blue_ui/theme/tokens.py`.
+- **Loading State**: Displays a `LoadingCircle` while waiting for AI responses.
 

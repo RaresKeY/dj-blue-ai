@@ -1,27 +1,29 @@
 # MainUI (App Shell)
 
-- Path: `ui_ux_team/prototype_r/py_learn.py:879-1341`
-- Purpose: Owns top-level window, layout, playback controls, transcript/chat toggles, and wiring to backend services (memory, audio capture, LLM transcription).
+- **Last Updated: 2026-02-18**
+- **Path**: `ui_ux_team/blue_ui/views/main_window.py`
+- **Purpose**: Owns the top-level window, playback controls, mood tagging, and wiring to background services (transcription, memory, audio).
 
 ## Quick Use
-- Instantiate inside a Qt app:  
+- Instantiate via `AppComposer` (recommended) or directly:
   ```python
+  from ui_ux_team.blue_ui.views.main_window import MainWindowView
   app = QApplication(sys.argv)
-  window = MainUI()
+  window = MainWindowView()
   window.show()
   sys.exit(app.exec())
   ```
-- API key: loaded via `.env` (`AI_STUDIO_API_KEY`) in `load_api_key` (`ui_ux_team/prototype_r/py_learn.py:934-939`).
+- API Key: Loaded via `load_api_key()` which checks runtime cache, keyring, and `.env` (if allowed).
 
 ## Key Behaviors
-- Recording/transcription: `record_transcript` toggles `AudioController` capture and spawns `transcript_worker` to write `temp.wav` and call `LLMUtilitySuite.transcribe_audio` (`ui_ux_team/prototype_r/py_learn.py:973-1023`).
-- Transcript routing: `transcript_ready` signal feeds `TranscriptWindow.add_transcript_segment` on the UI thread (`ui_ux_team/prototype_r/py_learn.py:917-920,1015-1019`).
-- Memory: session transcripts persisted via `ManagedMem.settr/gettr` (`ui_ux_team/prototype_r/py_learn.py:941-957`).
-- Playback: `play_click/stop_click` drive `PlaybackController` over a bundled WAV (`ui_ux_team/prototype_r/py_learn.py:1151-1177`).
-- Child windows: `open_transcript`, `open_bluebird_chat`, `settings_menu`, and `meet_type_menu` manage popups and stateful references (`ui_ux_team/prototype_r/py_learn.py:958-1058,1200-1227`).
+- **Transcription**: Managed by `TranscriptionManager` (`architects/helpers/transcription_manager.py`). Toggled via `record_transcript()`.
+- **Mood Tagging**: Receives `transcript_ready` signal, updates `QueuedMarqueeLabel` (mood tag), and triggers music changes based on `mood_map`.
+- **Playback**: Uses `MiniaudioPlayer` for music and `PlaybackTimeline` for seeking/progress.
+- **Child Windows**: Manages `TranscriptWindowView`, `BlueBirdChatView`, `APISettingsWindowView`, and `ProfileWindowView`.
+- **Theme**: Supports dynamic theme switching via `set_theme()` and `ThemeChooserMenu`.
 
 ## Extending
-- Add new sidebar buttons via `build_sidebar` (`ui_ux_team/prototype_r/py_learn.py:1074-1123`); wire callbacks directly on the created `ImageButton`.
-- To intercept transcripts before UI, hook into `transcript_ready` or wrap `_update_transcript_mem`.
-- To constrain API rate, place gating logic inside `transcript_worker` before `transcribe_audio`.
+- **New Sidebar Buttons**: Add to `build_sidebar()`.
+- **Custom Transcription Logic**: Update `handle_transcript_data()` or modify `TranscriptionManager`.
+- **New Popups**: Implement as a `QDialog` and add a trigger in `MainUI`.
 

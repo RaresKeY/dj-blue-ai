@@ -1,5 +1,7 @@
 # Git Tagging & Versioning Design Document
 
+- **Last Updated: 2026-02-18**
+
 ## 1. Overview
 This document defines the standard procedure for marking release points in the repository using Git tags. Proper tagging ensures that specific versions of the software can be identified, audited, and redeployed reliably.
 

@@ -1,15 +1,22 @@
 # Transcript Window
 
-- Path: `ui_ux_team/prototype_r/py_learn.py:724-752` (+ helpers `TextBox` at `ui_ux_team/prototype_r/py_learn.py:680-722`, `SearchBar` at `ui_ux_team/prototype_r/py_learn.py:806-838`)
-- Purpose: Secondary window that shows live transcript text and exposes a record toggle.
+- **Last Updated: 2026-02-18**
+- **Path**: `ui_ux_team/blue_ui/views/transcript_window.py`
+- **Purpose**: Secondary window that shows live transcript text and provides search and recording controls.
+
+## Key Features
+- **Real-time Updates**: Segments are appended as they arrive from `TranscriptionManager` via `MainUI`.
+- **Recording Toggle**: Controls the global recording state; updates icon and displays a "is recording..." status label with animated dots.
+- **Search**: `SearchBar` widget for filtering or finding specific terms within the transcript (uses `TextBox`).
+- **Persistence**: Transcripts are progressively saved to `ui_ux_team/transcripts/` by `MainUI`.
 
 ## Usage
-- Created by `MainUI` and toggled via `open_transcript` (`ui_ux_team/prototype_r/py_learn.py:958-972`).
-- Record button calls parent `record_transcript`; search bar is present but filtering is not implemented.
-- Append transcript lines by emitting `MainUI.transcript_ready`, which calls `TranscriptWindow.add_transcript_segment`.
+- Created by `MainUI` and toggled via `open_transcript()`.
+- Record button emits `record_clicked` signal to the parent `MainUI`.
+- Append transcript lines via `append_segment(text)`.
 
 ## Notes
-- `_read_transcript` is stubbed; implement to pre-load saved sessions from `ManagedMem` if desired.
-- The layout is vertical: record/search row (10%), text area (90%).
-- The text box is read-only and styled for dark theme; modify CSS in `TextBox` if you change theming.
+- **Styling**: Uses `COLOR_BG_MAIN` and `ACCENT` tokens from `ui_ux_team/blue_ui/theme/tokens.py`.
+- **Native Titlebar**: Uses `apply_native_titlebar_for_theme` for a consistent OS look.
+- **Layout**: Vertical layout with recording/search row on top, followed by the main text area.
 

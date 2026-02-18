@@ -1,32 +1,31 @@
 # Audio Pipeline
 
-- Path: `architects/helpers/audio_utils.py` (core `AudioController` at `:262-364,445-464`; writers at `:466-480`; playback/recording controllers at `:15-131` and `:133-260`).
-- Purpose: Capture mic + speaker, package chunks, and hand off PCM/WAV for playback or API upload.
+- **Last Updated: 2026-02-18**
+- **Core Path**: `architects/helpers/audio_utils.py`
+- **Purpose**: Capture mic and system audio (speaker), package chunks (PCM), and provide audio bytes for analysis and transcription.
+
+## Key Controllers
+- **AudioController**: Basic capture of mic and speaker using `pyaudio`.
+- **LiveMixerController**: Specialized Linux controller for capturing from multiple sources using `pw-record` (PipeWire/PulseAudio) and blacklisting noise.
+- **RecordingController**: Internal handler for `pyaudio` input streams.
+- **PlaybackRecorderLinux**: Internal handler for capturing system audio on Linux.
 
 ## Usage
-- Basic capture:
+- Usually managed via `TranscriptionManager`:
   ```python
-  controller = AudioController(chunk_seconds=30)
-  controller.start()
-  # ... later ...
-  pcm = controller.pop_combined_stereo()  # mic mirrored to L/R, speaker stereo intact
-  write_wav("out.wav", pcm, rate=controller.mic.rate, channels=2, sampwidth=controller.mic.sampwidth)
-  controller.stop()
-  controller.close()
+  from architects.helpers.transcription_manager import TranscriptionManager
+  manager = TranscriptionManager(api_key, chunk_seconds=30)
+  manager.start_recording()
+  # manager collects chunks and calls API automatically
   ```
-- For dual-channel (mic left, speaker mono right) use `pop_combined_dual`.
-- `RecordingController` and `PlaybackRecorderLinux` are started internally; avoid starting them directly unless you are bypassing `AudioController`.
 
 ## MiniaudioPlayer
-- Path: `architects/helpers/miniaudio_player.py`
-- Purpose: Lightweight audio playback for music files (mp3, wav, flac).
-- **Volume Control**: Implements software volume scaling via a generator (`_volume_generator`). 
-    - Note: The generator requires priming (calling `next()`) before being passed to `miniaudio.PlaybackDevice` to ensure it can accept `send()` calls immediately.
-    - Supports dynamic volume adjustment (0.0 - 1.0) via `set_volume()`.
+- **Path**: `architects/helpers/miniaudio_player.py`
+- **Purpose**: Lightweight playback for music files (`.mp3`, `.wav`, `.flac`).
+- **Features**: Software volume control (0.0 - 1.0), pause/resume, and position/duration reporting.
 
 ## Operational Notes
-- Dependencies: `pyaudio`, `parec` (PulseAudio/PipeWire) for speaker capture; `miniaudio` for music playback.
-- Chunk timing is driven by a background thread; `stop()` forces a final chunk flush.
-- PCM is raw 16-bit little-endian; resample/downmix before upload if you need smaller files.
-- Playback of static WAVs uses `PlaybackController` (callback-based, supports pause/resume) (`architects/helpers/audio_utils.py:15-70`).
+- **Linux Requirements**: `pw-record` for speaker capture.
+- **Combined Audio**: Stereo output where left channel is usually mic (mono mirrored) and right channel is speaker (mono downmixed or original right).
+- **Chunking**: Defaults to 30-second chunks (`T_CHUNK`).
 

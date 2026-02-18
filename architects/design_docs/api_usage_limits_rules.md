@@ -1,5 +1,7 @@
 # API Usage Limits Rules (Blue UI)
 
+- **Last Updated: 2026-02-18**
+
 ## Overview
 Blue UI stores API usage limits in app config and uses strict normalization to prevent invalid values from being persisted or loaded.
 
