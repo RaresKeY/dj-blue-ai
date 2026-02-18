@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
-from .runtime_paths import default_music_folder, ensure_user_config_dir, legacy_repo_config_dir, user_config_dir
+from .runtime_paths import (
+    default_music_folder,
+    ensure_user_config_dir,
+    legacy_repo_config_dir,
+    runtime_base_dir,
+    user_config_dir,
+)
 
 CONFIG_FILE = "app_config.json"
 _LEGACY_THEME = "theme_config.json"
@@ -14,10 +21,12 @@ _LEGACY_AUDIO = "audio_config.json"
 
 
 def config_path() -> Path:
+    """Returns the path to the unified configuration file."""
     return user_config_dir() / CONFIG_FILE
 
 
 def _legacy_paths(filename: str) -> list[Path]:
+    """Returns a list of potential legacy paths for a configuration file."""
     return [
         user_config_dir() / filename,
         legacy_repo_config_dir() / filename,
@@ -25,6 +34,7 @@ def _legacy_paths(filename: str) -> list[Path]:
 
 
 def load_json(path: Path) -> dict[str, Any] | None:
+    """Loads a JSON file and returns its content as a dictionary."""
     try:
         if not path.exists():
             return None
@@ -36,6 +46,7 @@ def load_json(path: Path) -> dict[str, Any] | None:
 
 
 def save_json(path: Path, payload: dict[str, Any]) -> bool:
+    """Saves a dictionary as a JSON file."""
     try:
         ensure_user_config_dir()
         with open(path, "w", encoding="utf-8") as f:
@@ -46,6 +57,7 @@ def save_json(path: Path, payload: dict[str, Any]) -> bool:
 
 
 def default_config() -> dict[str, Any]:
+    """Returns the default application configuration."""
     return {
         "selected_theme": "dark_theme",
         "music_folder": str(default_music_folder()),
@@ -53,10 +65,18 @@ def default_config() -> dict[str, Any]:
         "api_usage_requests_per_minute": 20,
         "api_usage_requests_per_day": 1200,
         "api_usage_monthly_budget_usd": 5.0,
+        # Persistent usage state metrics
+        "api_usage_state_minute_bucket": "",
+        "api_usage_state_minute_count": 0,
+        "api_usage_state_day_bucket": "",
+        "api_usage_state_day_count": 0,
+        "api_usage_state_month_bucket": "",
+        "api_usage_state_month_spend_usd": 0.0,
     }
 
 
 def _normalized_config(raw: dict[str, Any] | None) -> dict[str, Any]:
+    """Normalizes and validates a raw configuration dictionary."""
     base = default_config()
     if not isinstance(raw, dict):
         return base
@@ -74,6 +94,7 @@ def _normalized_config(raw: dict[str, Any] | None) -> dict[str, Any]:
     if pref in {"allow", "deny"}:
         out["api_env_fallback_preference"] = pref
 
+    # Limits normalization
     rpm = raw.get("api_usage_requests_per_minute")
     if isinstance(rpm, (int, float)):
         out["api_usage_requests_per_minute"] = max(1, min(int(rpm), 500))
@@ -86,10 +107,30 @@ def _normalized_config(raw: dict[str, Any] | None) -> dict[str, Any]:
     if isinstance(monthly_budget, (int, float)):
         out["api_usage_monthly_budget_usd"] = max(1.0, min(float(monthly_budget), 100000.0))
 
+    # State metrics normalization
+    for key in [
+        "api_usage_state_minute_bucket",
+        "api_usage_state_day_bucket",
+        "api_usage_state_month_bucket",
+    ]:
+        val = raw.get(key)
+        if isinstance(val, str):
+            out[key] = val
+
+    for key in ["api_usage_state_minute_count", "api_usage_state_day_count"]:
+        val = raw.get(key)
+        if isinstance(val, (int, float)):
+            out[key] = int(val)
+
+    spend = raw.get("api_usage_state_month_spend_usd")
+    if isinstance(spend, (int, float)):
+        out["api_usage_state_month_spend_usd"] = round(float(spend), 6)
+
     return out
 
 
 def _load_legacy_split_config() -> dict[str, Any]:
+    """Attempts to load and merge legacy split configuration files."""
     merged: dict[str, Any] = {}
     for p in _legacy_paths(_LEGACY_THEME):
         data = load_json(p)
@@ -105,7 +146,28 @@ def _load_legacy_split_config() -> dict[str, Any]:
     return merged
 
 
+def _migrate_frozen_config_if_needed() -> None:
+    """Moves configuration from root/config to platform-specific directory if needed."""
+    new_dir = user_config_dir()
+    new_path = new_dir / CONFIG_FILE
+
+    if new_path.exists():
+        return
+
+    # Old location was always runtime_base_dir() / "config"
+    old_path = runtime_base_dir() / "config" / CONFIG_FILE
+
+    if old_path.exists() and old_path.resolve() != new_path.resolve():
+        try:
+            ensure_user_config_dir()
+            shutil.copy2(old_path, new_path)
+        except Exception:
+            pass
+
+
 def ensure_config_initialized() -> dict[str, Any]:
+    """Ensures the configuration is initialized and migrated if necessary."""
+    _migrate_frozen_config_if_needed()
     path = config_path()
     current = load_json(path)
     if current is None:
@@ -117,11 +179,13 @@ def ensure_config_initialized() -> dict[str, Any]:
 
 
 def get_setting(key: str, default: Any = None) -> Any:
+    """Retrieves a specific setting from the configuration."""
     cfg = ensure_config_initialized()
     return cfg.get(key, default)
 
 
 def set_setting(key: str, value: Any) -> bool:
+    """Updates a specific setting in the configuration."""
     cfg = ensure_config_initialized()
     cfg[key] = value
     cfg = _normalized_config(cfg)

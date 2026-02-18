@@ -888,14 +888,22 @@ class MainUI(QWidget):
         self._meet_type = None
 
     def settings_menu(self):
-        if self._settings_menu is not None and self._settings_menu.isVisible():
-            self._settings_menu.close()
-            self._settings_menu = None
+        if self._settings_menu is None:
+            self._settings_menu = self._build_settings_popup()
+            self._settings_menu.closed.connect(lambda: setattr(self, "_settings_menu", None))
+            self._settings_menu.resize(600, 450)
+            x = self.x() + (self.width() - self._settings_menu.width()) // 2
+            y = self.y() + (self.height() - self._settings_menu.height()) // 2
+            self._settings_menu.move(x, y)
+            apply_native_titlebar_for_theme(self._settings_menu)
+            self._install_focus_tracking(self._settings_menu)
+            self._settings_menu.show()
+            self._settings_menu.raise_()
+            self._settings_menu.activateWindow()
             return
 
-        self._settings_menu = self._build_settings_popup()
-        self._settings_menu.destroyed.connect(lambda *_: setattr(self, "_settings_menu", None))
-        self._settings_menu.show_for_parent(self)
+        self._settings_menu.close()
+        self._settings_menu = None
 
     def _build_settings_popup(self) -> SettingsPopup:
         recording_tabs = QListWidget()
@@ -972,7 +980,6 @@ class MainUI(QWidget):
                 "Music Library": music_tab,
                 "API Usage Limits": api_usage_tab,
             },
-            parent=self,
             margin=8,
         )
         for idx in range(settings_popup.list.count()):
@@ -1027,7 +1034,6 @@ class MainUI(QWidget):
         if self._settings_menu is not None:
             apply_native_titlebar_for_theme(self._settings_menu, theme_key)
             self._settings_menu.refresh_theme()
-            self._settings_menu.show_for_parent(self)
 
     def info_clicked(self):
         mood_items = [
@@ -1310,6 +1316,8 @@ class MainUI(QWidget):
             windows.append(self._api_settings_window)
         if self._bluebird_chat is not None:
             windows.append(self._bluebird_chat)
+        if self._settings_menu is not None:
+            windows.append(self._settings_menu)
         return windows
 
     def _restore_open_managed_windows(self, active_window: QWidget | None = None) -> None:
@@ -1321,9 +1329,11 @@ class MainUI(QWidget):
             for window in windows:
                 if window.isMinimized():
                     window.showNormal()
-                elif not window.isVisible():
-                    window.show()
-                window.raise_()
+                    window.raise_()
+                elif window.isVisible():
+                    # Just raise, don't call show() or move() to avoid snapping
+                    window.raise_()
+            
             if active_window is not None and active_window in windows:
                 active_window.raise_()
                 active_window.activateWindow()
@@ -1480,21 +1490,9 @@ class MainUI(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._position_transcript_hint_arrow()
-        if (
-            self._settings_menu is not None
-            and self._settings_menu.isVisible()
-            and not self._settings_menu.is_user_dragging()
-        ):
-            self._settings_menu.show_for_parent(self)
 
     def moveEvent(self, event):
         super().moveEvent(event)
-        if (
-            self._settings_menu is not None
-            and self._settings_menu.isVisible()
-            and not self._settings_menu.is_user_dragging()
-        ):
-            self._settings_menu.show_for_parent(self)
 
 
 MainWindowView = MainUI

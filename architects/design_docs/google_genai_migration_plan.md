@@ -1,92 +1,27 @@
-# Google GenAI Migration Plan (from `google.generativeai` to `google.genai`)
+# Google GenAI Migration Plan (COMPLETED)
 
-## Objective
-Replace deprecated `google.generativeai` usage with the supported `google.genai` SDK while preserving existing chat/transcription behavior in Blue UI and helper modules.
+- **Last Updated: 2026-02-18**
 
-## Baseline Check (2026-02-18)
+## Status: Completed ✅
+The project has been successfully migrated from the deprecated `google.generativeai` SDK to the supported `google.genai` SDK.
+
+### Changes Implemented
+1.  **Dependency Added**: `google-genai==1.4.0` added to `requirements.txt`.
+2.  **Compatibility Layer Created**: `architects/helpers/genai_client.py` introduced to shim the new SDK while providing a stable internal API.
+3.  **Core Helpers Refactored**:
+    -   `architects/helpers/api_utils.py`: Refactored `LLMUtilitySuite` to use `GenAIClient`.
+    -   `architects/helpers/gemini_chatbot.py`: Refactored `GeminiChatbot` to use `GenAIClient`.
+4.  **Verification**: Application launches without `FutureWarning` or errors via root `main.py`.
+
+## Baseline Check (Post-Migration)
 Command run:
-- `timeout 10 .venv/bin/python main.py` (Success - app launches via shim)
-- `timeout 10 .venv/bin/python ui_ux_team/blue_ui/app/main.py` (Success - app launches directly)
+- `timeout 10 .venv/bin/python main.py` (Success - app launches without SDK warnings)
 
-Observed output for `main.py`:
-1. Deprecation warning from `google.generativeai` in `architects/helpers/api_utils.py`.
+## Technical Architecture (Current)
+- `GenAIClient` handles `genai.Client` instantiation and response normalization.
+- `GenAIChatSession` handles chat history and multi-turn logic using the new `generate_content` patterns.
+- Transcription uses `CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE_SIMPLE` for structured JSON output, maintaining fallback parsing for robustness.
 
-## In-Scope Files (current deprecated SDK usage)
-- `architects/helpers/api_utils.py`
-- `architects/helpers/gemini_chatbot.py`
-
-Secondary/demo usage (optional cleanup after core migration):
-- `ui_ux_team/prototype_r/audio_transcript_test.py`
-- docs/build references mentioning `google.generativeai`
-
-## Target Architecture
-Keep existing app-facing interfaces stable:
-- `LLMUtilitySuite` public methods stay unchanged.
-- `GeminiChatbot` public methods stay unchanged.
-
-Replace only SDK internals via a compatibility layer:
-- New module: `architects/helpers/genai_client.py`
-- `api_utils.py` and `gemini_chatbot.py` call this layer instead of direct SDK APIs.
-
-This limits blast radius and allows incremental cutover.
-
-## API Mapping Plan
-### Configuration
-- Current: `genai.configure(api_key=...)`
-- Target: instantiate `google.genai.Client(api_key=...)` once and inject/use per helper object.
-
-### Text Generation
-- Current: `GenerativeModel(...).generate_content(...)`
-- Target: `client.models.generate_content(...)` equivalent path.
-
-### Chat Sessions
-- Current: `model.start_chat(...).send_message(...)`
-- Target: session wrapper in compatibility layer that stores history and calls `client.models.generate_content(...)`.
-
-### Embeddings
-- Current: `genai.embed_content(...)`
-- Target: `client.models.embed_content(...)` equivalent response normalization.
-
-### File Upload / Polling
-- Current: `genai.upload_file`, `genai.get_file`
-- Target: files API in `google.genai` with ACTIVE polling shim in compatibility layer.
-
-### Model Listing
-- Current: `genai.list_models()`
-- Target: model listing endpoint in `google.genai`, normalized to current return shape.
-
-### Structured Output / Schemas
-- Current: `genai.types.Schema`, `GenerationConfig(response_schema=...)`
-- Target: `google.genai` schema/response config objects; keep JSON parse fallback if schema invocation differs.
-
-## Migration Phases
-1. Introduce dependency and compatibility layer.
-2. Migrate `architects/helpers/api_utils.py` internals to compatibility layer.
-3. Migrate `architects/helpers/gemini_chatbot.py` internals to compatibility layer.
-4. Run app smoke tests (`main`, chat window preview, transcript flow).
-5. Remove direct `google.generativeai` imports.
-6. Update build/docs to include `google.genai` and remove deprecated module references.
-
-## Validation Checklist
-- No `FutureWarning` about `google.generativeai` at startup.
-- Chat sends/receives messages normally.
-- Transcript audio transcription still returns expected normalized payload keys:
-  - `text`, `summary`, `emotion`, `translation`
-- API usage guard still receives usage metadata and records limits correctly.
-- Model list and embedding utilities still function.
-
-## Risks
-- SDK response/usage metadata shape differences may break cost accounting.
-- Cache/context semantics differ between old and new SDKs.
-- File upload state model may have different field names.
-
-## Risk Mitigation
-- Centralize response normalization in compatibility layer.
-- Keep strict fallback parsing for structured JSON.
-- Add focused tests around:
-  - usage metadata extraction
-  - transcript response normalization
-  - chat response handling
-
-## Out-of-Scope for this migration doc
-- Fixing `main.py` (legacy headless) import error (`RECORD_SECONDS` export issue in `the_listeners`).
+## Cleanup
+- Direct imports of `google.generativeai` have been removed from active production helpers.
+- `LLMUtilitySuite` public interface remains backward-compatible with existing UI callers.

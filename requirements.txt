@@ -66,3 +66,4 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 uritemplate==4.2.0
 urllib3==2.6.3
+google-genai==1.4.0

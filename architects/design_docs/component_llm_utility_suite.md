@@ -2,23 +2,20 @@
 
 - **Last Updated: 2026-02-18**
 - **Path**: `architects/helpers/api_utils.py`
-- **Purpose**: Singleton wrapper for Google Gemini API calls (text, chat, embeddings, transcription).
+- **Purpose**: Singleton wrapper for Google Gemini API calls, now using the `google.genai` SDK via `GenAIClient`.
 
 ## Setup
 - Requires `AI_STUDIO_API_KEY`.
-- First instantiation configures the `google.generativeai` SDK.
-- Integrated with `api_usage_guard` to respect rate limits and quotas.
+- Initialized with a `GenAIClient` compatibility layer to ensure stable response normalization and metadata tracking.
+- Integrated with `api_usage_guard` for request limits and budget enforcement.
 
 ## Common Calls
-- **Transcription from Bytes**: `transcribe_audio_bytes(audio_bytes, mime_type="audio/wav", model_name="models/gemini-2.5-flash-lite", structured=True)`
-  - Returns a dictionary with `text`, `summary`, `emotion`, `translation`, and `language_code`.
-  - Uses `CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE_SIMPLE` for structured JSON output.
-- **Text Generation**: `generate_text(prompt, model_name="models/gemini-1.5-flash", system_prompt=...)`
-- **Chat**: `chat = llm.start_chat(); chat.send_message("hi")`
-- **Embeddings**: `get_embedding(text)` or `get_batch_embeddings(texts)`
+- **Transcription**: `transcribe_audio_bytes()` uses `GenAIClient.generate_content` with JSON response mode.
+- **Chat**: `start_chat()` returns a `GenAIChatSession` that handles history and token tracking.
+- **Embeddings**: `get_embedding()` and `get_batch_embeddings()` use the latest SDK embedding methods.
 
-## Notes
-- **Audio Limits**: Inline audio limit is 20 MB (`INLINE_AUDIO_LIMIT_BYTES`). Files larger than this should be uploaded via the File API first.
-- **Structured Parsing**: Normalizes JSON responses, strips markdown code fences, and ensures valid emotion tags.
-- **Emotions**: Restricted to `positive|neutral|tense|unfocused|collaborative|creative|unproductive`.
+## Technical Notes
+- **Compatibility Layer**: Uses `architects/helpers/genai_client.py` to shim the new SDK logic while preserving the old public interface.
+- **Audio Thresholds**: Inline audio is capped at 20 MB (`INLINE_AUDIO_LIMIT_BYTES`); larger files are automatically uploaded via `GenAIClient.upload_file`.
+- **Metadata**: Response usage metadata is normalized into a standard dictionary for consistent logging and budget tracking.
 

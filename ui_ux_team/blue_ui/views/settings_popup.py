@@ -64,7 +64,6 @@ class PopupTitleBar(QWidget):
         super().__init__(parent)
         self.setFixedHeight(40)
         self._drag_pos = None
-        self._system_dragging = False
         self._title_text = title
 
         layout = QHBoxLayout(self)
@@ -114,46 +113,54 @@ class PopupTitleBar(QWidget):
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
             win = self.window()
+            # Notify window that drag started to prevent auto-repositioning
             begin_drag = getattr(win, "_begin_user_drag", None)
             if callable(begin_drag):
                 begin_drag()
+
             handle = win.windowHandle()
             if handle is not None:
-                moved = False
                 try:
-                    moved = bool(handle.startSystemMove())
-                except TypeError:
-                    moved = bool(handle.startSystemMove(e.globalPosition().toPoint()))
-                if moved:
-                    self._system_dragging = True
-                    self._drag_pos = None
-                    e.accept()
-                    return
-            self._system_dragging = False
+                    # Prefer native system move if available
+                    if hasattr(handle, "startSystemMove"):
+                        if handle.startSystemMove():
+                            e.accept()
+                            return
+                except Exception:
+                    pass
+
+            # Fallback to manual move
             self._drag_pos = e.globalPosition().toPoint()
+            e.accept()
 
     def mouseMoveEvent(self, e):
-        if self._system_dragging:
-            return
-        if self._drag_pos is not None:
-            delta = e.globalPosition().toPoint() - self._drag_pos
+        if e.buttons() & Qt.LeftButton and self._drag_pos is not None:
+            # Calculate delta using global position to avoid jitter
+            current_pos = e.globalPosition().toPoint()
+            delta = current_pos - self._drag_pos
             self.window().move(self.window().pos() + delta)
-            self._drag_pos = e.globalPosition().toPoint()
+            self._drag_pos = current_pos
+            e.accept()
 
     def mouseReleaseEvent(self, e):
-        self._system_dragging = False
         self._drag_pos = None
         win = self.window()
+        # Notify window that drag ended
         end_drag = getattr(win, "_end_user_drag", None)
         if callable(end_drag):
             end_drag()
+        e.accept()
 
 
 class SettingsPopup(QWidget):
+    closed = Signal()
+
     def __init__(self, categories=None, parent=None, margin=100):
-        super().__init__(parent)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Popup)
+        # Pass None to super() to ensure it is a top-level window
+        super().__init__(None)
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
         self.setObjectName("SettingsPopup")
+        self.setWindowTitle("Settings")
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setAutoFillBackground(False)
@@ -364,54 +371,6 @@ class SettingsPopup(QWidget):
         }}
         """
 
-    def show_pos_size(self, parent_pos: QPoint, parent_size):
-        win = self.parent()
-        if win:
-            win = win.window()
-            self.show_for_parent(win)
-            return
-
-        x = parent_pos.x() + self.margin
-        y = parent_pos.y() + self.margin
-        w = max(self.minimumWidth(), parent_size.width() - (self.margin * 2))
-        h = max(self.minimumHeight(), parent_size.height() - (self.margin * 2))
-        self.setGeometry(x, y, w, h)
-        apply_native_titlebar_for_theme(self)
-        self.show()
-
-    def show_for_parent(self, parent_window: QWidget | None) -> None:
-        if self._user_dragging:
-            return
-        if parent_window is None:
-            self.show()
-            return
-
-        host = parent_window.window()
-        host_geo = host.geometry()
-        host_top_left = host.mapToGlobal(QPoint(0, 0))
-        frame_h = host.frameGeometry().height()
-        titlebar_h = max(0, frame_h - host_geo.height())
-
-        desired_margin = max(8, int(self.margin))
-        max_margin_x = max(4, (host_geo.width() - self.minimumWidth()) // 2 - 4)
-        max_margin_y = max(4, (host_geo.height() - self.minimumHeight()) // 2 - 4)
-        margin_x = max(4, min(desired_margin, max_margin_x))
-        margin_y = max(4, min(desired_margin, max_margin_y))
-
-        available_w = max(320, host_geo.width() - 8)
-        available_h = max(220, host_geo.height() - 8)
-        target_w = min(available_w, max(self.minimumWidth(), host_geo.width() - (margin_x * 2)))
-        target_h = min(available_h, max(self.minimumHeight(), host_geo.height() - (margin_y * 2)))
-
-        x = host_top_left.x() + max(4, (host_geo.width() - target_w) // 2)
-        y = host_top_left.y() + titlebar_h + max(4, (host_geo.height() - target_h) // 2)
-
-        self.setGeometry(x, y, target_w, target_h)
-        apply_native_titlebar_for_theme(self)
-        self.show()
-        self.raise_()
-        self.activateWindow()
-
     def _position_size_grip(self) -> None:
         if self._size_grip is None or self._plate is None:
             return
@@ -433,6 +392,10 @@ class SettingsPopup(QWidget):
 
     def is_user_dragging(self) -> bool:
         return self._user_dragging
+
+    def closeEvent(self, event):
+        self.closed.emit()
+        return super().closeEvent(event)
 
 
 class FloatingMenu(QWidget):

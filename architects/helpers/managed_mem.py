@@ -52,10 +52,25 @@ mem.close()  # stop the worker thread
 The `log` list is capped at 500 entries; older entries are pruned automatically.
 """
 
+import os
+import ast
+import json
+import shutil
+import time
+import queue
+import threading
+from datetime import datetime
+from pathlib import Path
+from typing import Any, List, Optional
+
+from .jsonrules_song import make_json_safe, restore_from_json
+from ui_ux_team.blue_ui.config.runtime_paths import user_config_dir, runtime_base_dir
+
+# ... (Usage comments kept) ...
+
 class ManagedMem:
     _instance: Optional["ManagedMem"] = None
     _lock: threading.RLock = threading.RLock()
-    _file: str = "managed_mem.json"
     _log_cap: int = 500
 
     _mem: dict
@@ -67,6 +82,7 @@ class ManagedMem:
     _writer_thread: Optional[threading.Thread]
     _async_exception: Optional[BaseException]
     _context_stack: List[bool]
+    _file_path: Path
 
     def __new__(cls):
         if cls._instance is None:
@@ -80,8 +96,27 @@ class ManagedMem:
             cls._instance._writer_thread = None
             cls._instance._async_exception = None
             cls._instance._context_stack = []
+            
+            # Resolve persistent file path
+            filename = "managed_mem.json"
+            new_path = user_config_dir() / filename
+            old_path = runtime_base_dir() / filename
+            
+            # Migration
+            if not new_path.exists() and old_path.exists() and old_path.resolve() != new_path.resolve():
+                try:
+                    user_config_dir().mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(old_path, new_path)
+                except Exception:
+                    pass
+            
+            cls._instance._file_path = new_path
             cls._instance._load()
         return cls._instance
+
+    @property
+    def _file(self) -> str:
+        return str(self._file_path)
     
     def timestamp_helper(self):
         ts = time.time()

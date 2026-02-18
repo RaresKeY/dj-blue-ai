@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDoubleSpinBox,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui_ux_team.blue_ui import settings as app_settings
+from ui_ux_team.blue_ui.app.api_usage_guard import current_usage_state
 from ui_ux_team.blue_ui.theme import tokens
 from ui_ux_team.blue_ui.widgets.settings_section import SettingsSection
 
@@ -112,6 +113,24 @@ class APIUsageLimitsForm(QWidget):
         self._monthly_budget.setSuffix(" /month")
         budget_form.addRow("Monthly budget", self._monthly_budget)
 
+        self._usage_section = SettingsSection(
+            "Current Usage",
+            "Monitor real-time consumption against configured limits.",
+        )
+        usage_form = QFormLayout()
+        usage_form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        usage_form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+        usage_form.setHorizontalSpacing(14)
+        usage_form.setVerticalSpacing(6)
+        self._usage_section.content_layout().addLayout(usage_form)
+
+        self._current_rpm = QLabel("0 / --")
+        self._current_rpd = QLabel("0 / --")
+        self._current_spend = QLabel("$0.00 / --")
+        usage_form.addRow("RPM (Current Minute)", self._current_rpm)
+        usage_form.addRow("RPD (Current Day)", self._current_rpd)
+        usage_form.addRow("Monthly Spend", self._current_spend)
+
         actions = QHBoxLayout()
         actions.setContentsMargins(0, 0, 0, 0)
         actions.setSpacing(6)
@@ -127,6 +146,7 @@ class APIUsageLimitsForm(QWidget):
 
         root.addWidget(self._request_section)
         root.addWidget(self._budget_section)
+        root.addWidget(self._usage_section)
         root.addLayout(actions)
         root.addWidget(self._status)
 
@@ -134,8 +154,21 @@ class APIUsageLimitsForm(QWidget):
         self._rpd.valueChanged.connect(self._persist_limits)
         self._monthly_budget.valueChanged.connect(self._persist_limits)
 
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setInterval(5000)
+        self._refresh_timer.timeout.connect(self._update_usage_display)
+        self._refresh_timer.start()
+
         self._load_from_settings()
         self.refresh_theme()
+
+    def _update_usage_display(self) -> None:
+        state = current_usage_state()
+        limits = app_settings.api_usage_limits()
+        
+        self._current_rpm.setText(f"{state['minute_count']} / {limits['requests_per_minute']}")
+        self._current_rpd.setText(f"{state['day_count']} / {limits['requests_per_day']}")
+        self._current_spend.setText(f"${state['month_spend_usd']:.4f} / ${float(limits['monthly_budget_usd']):.2f}")
 
     def _load_from_settings(self) -> None:
         limits = app_settings.api_usage_limits()
@@ -148,6 +181,7 @@ class APIUsageLimitsForm(QWidget):
         self._rpm.blockSignals(False)
         self._rpd.blockSignals(False)
         self._monthly_budget.blockSignals(False)
+        self._update_usage_display()
 
     def _persist_limits(self) -> None:
         saved = app_settings.set_api_usage_limits(
@@ -161,6 +195,7 @@ class APIUsageLimitsForm(QWidget):
             f"{int(saved['requests_per_day'])} req/day, "
             f"${float(saved['monthly_budget_usd']):.2f}/month."
         )
+        self._update_usage_display()
 
     def _reset_defaults(self) -> None:
         defaults = app_settings.api_usage_defaults()
@@ -231,3 +266,4 @@ class APIUsageLimitsForm(QWidget):
         )
         self._request_section.refresh_theme()
         self._budget_section.refresh_theme()
+        self._usage_section.refresh_theme()
