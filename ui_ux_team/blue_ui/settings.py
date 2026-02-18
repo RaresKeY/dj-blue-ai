@@ -130,6 +130,22 @@ def set_api_usage_limits(
     return current
 
 
+def chatbot_model() -> str:
+    return str(get_setting("chatbot_model", "models/gemini-2.5-pro"))
+
+
+def set_chatbot_model(model_name: str) -> None:
+    set_setting("chatbot_model", model_name)
+
+
+def transcription_model() -> str:
+    return str(get_setting("transcription_model", "models/gemini-2.5-flash-lite"))
+
+
+def set_transcription_model(model_name: str) -> None:
+    set_setting("transcription_model", model_name)
+
+
 def dotenv_path() -> Path:
     return runtime_base_dir() / ".env"
 

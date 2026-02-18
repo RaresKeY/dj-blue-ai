@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
+from ui_ux_team.blue_ui import settings as app_settings
 from architects.helpers.genai_client import GenAIClient, GenAIChatSession
 from ui_ux_team.blue_ui.app.api_usage_guard import record_usage, reserve_request
 
@@ -117,13 +118,13 @@ class LLMUtilitySuite:
     def generate_text(
         self,
         prompt: str,
-        model_name: str = "gemini-flash-latest",
+        model_name: str = None,
         system_prompt: str = None
     ) -> str:
         try:
             config = {"system_instruction": system_prompt} if system_prompt else None
             response = self.client.generate_content(
-                model_name=self._normalize_model_name(model_name),
+                model_name=self._normalize_model_name(model_name or app_settings.chatbot_model()),
                 contents=prompt,
                 config=config
             )
@@ -133,12 +134,12 @@ class LLMUtilitySuite:
 
     def start_chat(
         self,
-        model_name: str = "gemini-1.5-flash"
+        model_name: str = None
     ) -> GenAIChatSession:
         try:
             return GenAIChatSession(
                 client=self.client.client,
-                model_name=self._normalize_model_name(model_name)
+                model_name=self._normalize_model_name(model_name or app_settings.chatbot_model())
             )
         except Exception as e:
             print(f"Could not start chat session: {e}")
@@ -196,7 +197,7 @@ class LLMUtilitySuite:
         self,
         audio_source: Union[str, Path, bytes],
         *,
-        model_name: str = "models/gemini-2.5-flash-lite",
+        model_name: str = None,
         prompt: Optional[str] = None,
         mime_type: Optional[str] = None,
         structured: bool = True,
@@ -204,13 +205,14 @@ class LLMUtilitySuite:
         upload_threshold_bytes: int = INLINE_AUDIO_LIMIT_BYTES,
         wait_for_active_sec: int = 60,
     ) -> Dict[str, Any]:
-        allowed, reason = reserve_request("transcript", model_name=model_name)
+        target_model = self._normalize_model_name(model_name or app_settings.transcription_model())
+        allowed, reason = reserve_request("transcript", model_name=target_model)
         if not allowed:
             return {
                 "error": reason,
                 "limit_blocked": True,
                 "source": "api_usage_limits",
-                "model": model_name,
+                "model": target_model,
             }
 
         prompt = prompt or CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE
@@ -228,20 +230,19 @@ class LLMUtilitySuite:
             # as defined in the migration plan's risk mitigation section.
 
         try:
-            normalized_model = self._normalize_model_name(model_name)
             response = self.client.generate_content(
-                model_name=normalized_model,
+                model_name=target_model,
                 contents=[prompt, audio_part],
                 config=config if config else None
             )
             usage = response.get("usage", {})
             self._log_usage_dict(usage, context="transcribe_audio")
-            record_usage(scope="transcript", model_name=normalized_model, usage=usage)
+            record_usage(scope="transcript", model_name=target_model, usage=usage)
         except Exception as e:
             return {
                 "error": f"An error occurred during transcription: {e}",
                 "source": source,
-                "model": model_name,
+                "model": target_model,
             }
 
         parsed = self._maybe_parse_structured_json(response.get("text", ""), structured)

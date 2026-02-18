@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
 
 from architects.helpers.gemini_chatbot import GeminiChatbot
 from architects.helpers.resource_path import resource_path
+from ui_ux_team.blue_ui import settings as app_settings
 from ui_ux_team.blue_ui.theme import tokens
 from ui_ux_team.blue_ui.theme.native_window import apply_native_titlebar_for_theme
 from ui_ux_team.blue_ui.widgets.image_button import ImageButton
@@ -93,7 +94,7 @@ class BlueBirdChatView(QWidget):
         self.refresh_theme()
 
         if self.api_key:
-            self.chatbot = GeminiChatbot(self.api_key, model_name="gemini-3-flash-preview")
+            self.chatbot = GeminiChatbot(self.api_key, model_name=app_settings.chatbot_model())
             transcript = self.initial_transcript or "System: This is the start of the session."
             self.text_box.append_message("system", "*Initializing BlueBird AI context...*")
             self.set_input_enabled(False)

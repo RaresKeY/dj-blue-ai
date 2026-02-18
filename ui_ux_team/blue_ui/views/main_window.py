@@ -55,6 +55,7 @@ from ui_ux_team.blue_ui.widgets.toast import FloatingToast
 from ui_ux_team.blue_ui.widgets.onboarding_arrow_guide import OnboardingArrowGuide
 from ui_ux_team.blue_ui.widgets.volume import IntegratedVolumeControl
 from ui_ux_team.blue_ui.widgets.api_usage_limits_form import APIUsageLimitsForm
+from ui_ux_team.blue_ui.widgets.model_settings_form import ModelSettingsForm
 
 
 def get_project_root() -> Path:
@@ -986,6 +987,7 @@ class MainUI(QWidget):
         music_layout.addStretch(1)
 
         api_usage_tab = APIUsageLimitsForm()
+        model_tab = ModelSettingsForm()
 
         settings_popup = SettingsPopup(
             {
@@ -993,6 +995,7 @@ class MainUI(QWidget):
                 "Theme Selection": theme_tab,
                 "Music Library": music_tab,
                 "API Usage Limits": api_usage_tab,
+                "Model Selection": model_tab,
             },
             margin=8,
         )

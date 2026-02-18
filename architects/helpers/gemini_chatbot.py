@@ -1,6 +1,7 @@
 import datetime
 import typing
 
+from ui_ux_team.blue_ui import settings as app_settings
 from architects.helpers.genai_client import GenAIClient, GenAIChatSession
 from ui_ux_team.blue_ui.app.api_usage_guard import record_usage, reserve_request
 
@@ -22,11 +23,11 @@ class GeminiChatbot:
     def __init__(
         self,
         api_key: str,
-        model_name: str = "models/gemini-2.0-flash",
+        model_name: str = None,
         system_instruction: str = DEFAULT_SYSTEM_INSTRUCTION,
     ):
         self.api_key = api_key
-        self.model_name = self._normalize_model_name(model_name)
+        self.model_name = self._normalize_model_name(model_name or app_settings.chatbot_model())
         self.system_instruction = system_instruction
         self.client = GenAIClient(api_key=api_key)
         self.chat_session = None

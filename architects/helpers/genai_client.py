@@ -30,8 +30,32 @@ class GenAIClient:
     ) -> Dict[str, Any]:
         """Generic content generation wrapper with metadata normalization."""
         normalized_contents = self._normalize_contents(contents)
+        
+        # Build types.GenerateContentConfig
+        final_config = None
+        if config:
+            # Gemma models don't support system_instruction in config
+            is_gemini = "gemini" in model_name.lower()
+            
+            # Prepare config dict for GenerateContentConfig
+            cfg_dict = dict(config)
+            sys_inst = cfg_dict.pop("system_instruction", None)
+            
+            # Convert system_instruction to Content if model is Gemini
+            actual_sys_inst = None
+            if sys_inst and is_gemini:
+                if isinstance(sys_inst, str):
+                    actual_sys_inst = types.Content(parts=[types.Part.from_text(text=sys_inst)])
+                else:
+                    actual_sys_inst = sys_inst
+            
+            final_config = types.GenerateContentConfig(
+                system_instruction=actual_sys_inst,
+                **cfg_dict
+            )
+
         response = self.client.models.generate_content(
-            model=model_name, contents=normalized_contents, config=config
+            model=model_name, contents=normalized_contents, config=final_config
         )
         return self._normalize_response(response)
 
@@ -78,6 +102,10 @@ class GenAIClient:
 
         return uploaded
 
+    def list_models(self) -> List[Any]:
+        """Lists available models."""
+        return list(self.client.models.list())
+
     def _normalize_response(self, response: Any) -> Dict[str, Any]:
         """Normalizes SDK response into a consistent dictionary format."""
         normalized = {
@@ -110,17 +138,34 @@ class GenAIChatSession:
 
     def send_message(self, message: str) -> Dict[str, Any]:
         """Sends a message and updates local history shim."""
-        # Note: google.genai has its own chat session, but we shim it here for stable control.
-        # Alternatively, we could use client.chats.create()
         self.history.append({"role": "user", "parts": [{"text": message}]})
         
         # Normalize history before sending
         normalized_history = self._normalize_history(self.history)
         
+        # Build types.GenerateContentConfig
+        final_config = None
+        if self.config:
+            is_gemini = "gemini" in self.model_name.lower()
+            cfg_dict = dict(self.config)
+            sys_inst = cfg_dict.pop("system_instruction", None)
+            
+            actual_sys_inst = None
+            if sys_inst and is_gemini:
+                if isinstance(sys_inst, str):
+                    actual_sys_inst = types.Content(parts=[types.Part.from_text(text=sys_inst)])
+                else:
+                    actual_sys_inst = sys_inst
+            
+            final_config = types.GenerateContentConfig(
+                system_instruction=actual_sys_inst,
+                **cfg_dict
+            )
+
         response = self.client.models.generate_content(
             model=self.model_name,
             contents=normalized_history,
-            config=self.config
+            config=final_config
         )
         
         normalized = self._normalize_response(response)

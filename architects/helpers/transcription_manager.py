@@ -13,6 +13,7 @@ from architects.helpers.audio_utils import (
 from architects.helpers.api_utils import LLMUtilitySuite
 from mood_readers.librosa_cli import analyze_audio_bytes_logic
 from architects.platform_detection.platform_detection import os_info
+from ui_ux_team.blue_ui import settings as app_settings
 
 class TranscriptionManager:
     """
@@ -146,7 +147,7 @@ class TranscriptionManager:
             result = self._llm_utils.transcribe_audio_bytes(
                 wav_bytes,
                 mime_type="audio/wav",
-                model_name="models/gemini-2.5-flash-lite",
+                model_name=app_settings.transcription_model(),
                 prompt=prompt,
                 structured=True,
             )

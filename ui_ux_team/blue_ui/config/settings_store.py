@@ -65,6 +65,8 @@ def default_config() -> dict[str, Any]:
         "api_usage_requests_per_minute": 20,
         "api_usage_requests_per_day": 1200,
         "api_usage_monthly_budget_usd": 5.0,
+        "chatbot_model": "models/gemini-2.5-pro",
+        "transcription_model": "models/gemini-2.5-flash-lite",
         # Persistent usage state metrics
         "api_usage_state_minute_bucket": "",
         "api_usage_state_minute_count": 0,
@@ -106,6 +108,11 @@ def _normalized_config(raw: dict[str, Any] | None) -> dict[str, Any]:
     monthly_budget = raw.get("api_usage_monthly_budget_usd")
     if isinstance(monthly_budget, (int, float)):
         out["api_usage_monthly_budget_usd"] = max(1.0, min(float(monthly_budget), 100000.0))
+
+    for key in ["chatbot_model", "transcription_model"]:
+        val = raw.get(key)
+        if isinstance(val, str) and val.strip():
+            out[key] = val.strip()
 
     # State metrics normalization
     for key in [
