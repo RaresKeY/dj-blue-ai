@@ -72,8 +72,8 @@ If a tag was created on the wrong commit or has a typo:
 
 ## 6. Quick Command Cheat Sheet
 ```bash
-# List tags in creation order
-git tag --sort=creatordate
+# List last 5 tags in creation order
+git tag --sort=creatordate | tail -n 5
 
 # Tag a specific past commit
 git tag -a v0.1.0 <commit-sha> -m "Backdated tag"
