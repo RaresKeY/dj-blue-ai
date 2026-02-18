@@ -54,6 +54,7 @@ from ui_ux_team.blue_ui.widgets.timeline import PlaybackTimeline
 from ui_ux_team.blue_ui.widgets.toast import FloatingToast
 from ui_ux_team.blue_ui.widgets.onboarding_arrow_guide import OnboardingArrowGuide
 from ui_ux_team.blue_ui.widgets.volume import IntegratedVolumeControl
+from ui_ux_team.blue_ui.widgets.api_usage_limits_form import APIUsageLimitsForm
 
 
 def get_project_root() -> Path:
@@ -653,6 +654,14 @@ class MainUI(QWidget):
         return True
 
     def handle_transcript_data(self, data: dict):
+        if data.get("error"):
+            message = str(data.get("error") or "Unknown transcription error")
+            self._transcript_win.append_segment(f"[System] {message}\n")
+            if data.get("limit_blocked"):
+                self._transcript_win.set_recording_active(False)
+                FloatingToast(self).show_message("API usage limit reached")
+            return
+
         text = TranscriptionManager.format_transcript_text(data)
         if text:
             self._transcript_win.append_segment(text)
@@ -879,8 +888,23 @@ class MainUI(QWidget):
         self._meet_type = None
 
     def settings_menu(self):
+        if self._settings_menu is not None and self._settings_menu.isVisible():
+            self._settings_menu.close()
+            self._settings_menu = None
+            return
+
+        self._settings_menu = self._build_settings_popup()
+        self._settings_menu.destroyed.connect(lambda *_: setattr(self, "_settings_menu", None))
+        self._settings_menu.show_for_parent(self)
+
+    def _build_settings_popup(self) -> SettingsPopup:
         recording_tabs = QListWidget()
-        recording_tabs.addItems([f"{x} | {(y[:30].rstrip() + '...') if len(y) > 30 else y}" for x, y in get_display_names()])
+        sources = [f"{x} | {(y[:30].rstrip() + '...') if len(y) > 30 else y}" for x, y in get_display_names()]
+        if sources:
+            recording_tabs.addItems(sources)
+        else:
+            recording_tabs.addItem("No recording sources yet")
+        selection_color = getattr(theme_tokens, "ACCENT", "#FF8A3D")
         list_style = f"""
         QListWidget {{
             background: rgba(13, 19, 32, 0.35);
@@ -894,8 +918,8 @@ class MainUI(QWidget):
             border-radius: 6px;
         }}
         QListWidget::item:selected {{
-            background: rgba(255, 138, 61, 0.16);
-            color: #FF8A3D;
+            background: {_color_with_alpha(selection_color, 0.18, selection_color)};
+            color: {selection_color};
         }}
         """
         recording_tabs.setStyleSheet(list_style)
@@ -939,20 +963,23 @@ class MainUI(QWidget):
         music_layout.addWidget(music_pick_btn, alignment=Qt.AlignLeft)
         music_layout.addStretch(1)
 
-        test_tab = QListWidget()
-        test_tab.addItems(["test1", "test2"])
-        test_tab.setStyleSheet(list_style)
+        api_usage_tab = APIUsageLimitsForm()
 
-        self._settings_menu = SettingsPopup(
+        settings_popup = SettingsPopup(
             {
                 "Recording Sources": recording_tabs,
                 "Theme Selection": theme_tab,
                 "Music Library": music_tab,
-                "Test Tab": test_tab,
+                "API Usage Limits": api_usage_tab,
             },
             parent=self,
+            margin=8,
         )
-        self._settings_menu.show_pos_size(self.pos(), self.size())
+        for idx in range(settings_popup.list.count()):
+            if settings_popup.list.item(idx).text() == "API Usage Limits":
+                settings_popup.list.setCurrentRow(idx)
+                break
+        return settings_popup
 
     def _pick_music_folder(self):
         selected = QFileDialog.getExistingDirectory(self, "Select Music Folder", str(self._music_folder))
@@ -1000,6 +1027,7 @@ class MainUI(QWidget):
         if self._settings_menu is not None:
             apply_native_titlebar_for_theme(self._settings_menu, theme_key)
             self._settings_menu.refresh_theme()
+            self._settings_menu.show_for_parent(self)
 
     def info_clicked(self):
         mood_items = [
@@ -1452,6 +1480,21 @@ class MainUI(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._position_transcript_hint_arrow()
+        if (
+            self._settings_menu is not None
+            and self._settings_menu.isVisible()
+            and not self._settings_menu.is_user_dragging()
+        ):
+            self._settings_menu.show_for_parent(self)
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        if (
+            self._settings_menu is not None
+            and self._settings_menu.isVisible()
+            and not self._settings_menu.is_user_dragging()
+        ):
+            self._settings_menu.show_for_parent(self)
 
 
 MainWindowView = MainUI

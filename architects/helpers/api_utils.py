@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import google.generativeai as genai
 import numpy as np
 
+from ui_ux_team.blue_ui.app.api_usage_guard import record_usage, reserve_request
+
 MEET_TYPE_MOODS = "positive|neutral|tense|unfocused|collaborative|creative|unproductive"
 
 CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE = f"""
@@ -280,6 +282,15 @@ class LLMUtilitySuite:
         Returns:
             A dict containing transcript text, optional summary and segments, and the raw response.
         """
+        allowed, reason = reserve_request("transcript", model_name=model_name)
+        if not allowed:
+            return {
+                "error": reason,
+                "limit_blocked": True,
+                "source": "api_usage_limits",
+                "model": model_name,
+            }
+
         prompt = prompt or CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE
         audio_part, source = self._prepare_audio_part(
             audio_source,
@@ -302,6 +313,8 @@ class LLMUtilitySuite:
                 generation_config=generation_config,
             )
             self._log_usage(response, context="transcribe_audio")
+            usage = self._usage_snapshot(response)
+            record_usage(scope="transcript", model_name=normalized_model, usage=usage)
         except Exception as e:
             return {
                 "error": f"An error occurred during transcription: {e}",
@@ -316,13 +329,14 @@ class LLMUtilitySuite:
         primary_emotion = parsed.get("emotion") if parsed else None
 
         return {
-            "text": transcript_text.strip(),
+            "text": (transcript_text or "").strip(),
             "summary": parsed.get("summary") if parsed else None,
             "emotion": primary_emotion,
             "raw_response": response,
             "source": source,
             "model": model_name,
             "translation": parsed.get("translation") if parsed else None,
+            "usage": self._usage_snapshot(response),
         }
 
     def transcribe_audio_bytes(
@@ -346,6 +360,15 @@ class LLMUtilitySuite:
         if not mime_type:
             return {"error": "mime_type is required for raw audio bytes."}
 
+        allowed, reason = reserve_request("transcript", model_name=model_name)
+        if not allowed:
+            return {
+                "error": reason,
+                "limit_blocked": True,
+                "source": "api_usage_limits",
+                "model": model_name,
+            }
+
         prompt = prompt or CUSTOM_TRANSCRIPTION_PROMPT_MEET_TYPE_SIMPLE
         audio_part, source = self._prepare_audio_part(
             bytes(audio_bytes),
@@ -368,6 +391,8 @@ class LLMUtilitySuite:
                 generation_config=generation_config,
             )
             self._log_usage(response, context="transcribe_audio_bytes")
+            usage = self._usage_snapshot(response)
+            record_usage(scope="transcript", model_name=normalized_model, usage=usage)
         except Exception as e:
             return {
                 "error": f"An error occurred during transcription: {e}",
@@ -389,6 +414,7 @@ class LLMUtilitySuite:
             "source": source,
             "model": model_name,
             "translation": parsed.get("translation") if parsed else None,
+            "usage": self._usage_snapshot(response),
         }
 
     @staticmethod
@@ -448,6 +474,32 @@ class LLMUtilitySuite:
                 parts.append(f"total={total_tokens}")
             label = f"[{context}] " if context else ""
             print(f"LLM usage {label}{', '.join(parts)}")
+
+    @staticmethod
+    def _usage_snapshot(response: Any) -> Dict[str, int]:
+        usage = getattr(response, "usage_metadata", None) or getattr(response, "usageMetadata", None)
+        if usage is None:
+            return {}
+        if isinstance(usage, dict):
+            raw = usage
+        else:
+            raw = {
+                "input_token_count": getattr(usage, "input_token_count", None),
+                "output_token_count": getattr(usage, "output_token_count", None),
+                "total_token_count": getattr(usage, "total_token_count", None),
+                "prompt_token_count": getattr(usage, "prompt_token_count", None),
+                "candidates_token_count": getattr(usage, "candidates_token_count", None),
+            }
+
+        normalized: Dict[str, int] = {}
+        for key, value in raw.items():
+            if value is None:
+                continue
+            try:
+                normalized[key] = int(value)
+            except Exception:
+                continue
+        return normalized
 
     @staticmethod
     def _build_generation_config(response_schema) -> Optional[Any]:

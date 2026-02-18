@@ -50,6 +50,9 @@ def default_config() -> dict[str, Any]:
         "selected_theme": "dark_theme",
         "music_folder": str(default_music_folder()),
         "api_env_fallback_preference": "",
+        "api_usage_requests_per_minute": 20,
+        "api_usage_requests_per_day": 1200,
+        "api_usage_monthly_budget_usd": 5.0,
     }
 
 
@@ -70,6 +73,18 @@ def _normalized_config(raw: dict[str, Any] | None) -> dict[str, Any]:
     pref = str(raw.get("api_env_fallback_preference", "")).strip().lower()
     if pref in {"allow", "deny"}:
         out["api_env_fallback_preference"] = pref
+
+    rpm = raw.get("api_usage_requests_per_minute")
+    if isinstance(rpm, (int, float)):
+        out["api_usage_requests_per_minute"] = max(1, min(int(rpm), 500))
+
+    rpd = raw.get("api_usage_requests_per_day")
+    if isinstance(rpd, (int, float)):
+        out["api_usage_requests_per_day"] = max(10, min(int(rpd), 200000))
+
+    monthly_budget = raw.get("api_usage_monthly_budget_usd")
+    if isinstance(monthly_budget, (int, float)):
+        out["api_usage_monthly_budget_usd"] = max(1.0, min(float(monthly_budget), 100000.0))
 
     return out
 

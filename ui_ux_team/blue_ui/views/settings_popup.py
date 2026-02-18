@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
     QFrame,
     QSizeGrip,
+    QScrollArea,
 )
 from PySide6.QtGui import QFont
 from ui_ux_team.blue_ui.theme import tokens
@@ -63,6 +64,7 @@ class PopupTitleBar(QWidget):
         super().__init__(parent)
         self.setFixedHeight(40)
         self._drag_pos = None
+        self._system_dragging = False
         self._title_text = title
 
         layout = QHBoxLayout(self)
@@ -80,6 +82,9 @@ class PopupTitleBar(QWidget):
         self.refresh_theme()
 
     def refresh_theme(self):
+        selection_color = getattr(tokens, "ACCENT", ORANGE_SELECTION)
+        hover_bg = _with_alpha(selection_color, 0.16 if _is_light(tokens.COLOR_BG_MAIN) else 0.14)
+        hover_border = _with_alpha(selection_color, 0.50 if _is_light(tokens.COLOR_BG_MAIN) else 0.42)
         self.setStyleSheet(
             f"""
             QLabel {{
@@ -99,25 +104,49 @@ class PopupTitleBar(QWidget):
                 font-size: 14px;
             }}
             QPushButton:hover {{
-                background: rgba(255, 138, 61, 0.16);
-                color: {ORANGE_SELECTION};
-                border: 1px solid rgba(255, 138, 61, 0.50);
+                background: {hover_bg};
+                color: {selection_color};
+                border: 1px solid {hover_border};
             }}
             """
         )
 
     def mousePressEvent(self, e):
         if e.button() == Qt.LeftButton:
+            win = self.window()
+            begin_drag = getattr(win, "_begin_user_drag", None)
+            if callable(begin_drag):
+                begin_drag()
+            handle = win.windowHandle()
+            if handle is not None:
+                moved = False
+                try:
+                    moved = bool(handle.startSystemMove())
+                except TypeError:
+                    moved = bool(handle.startSystemMove(e.globalPosition().toPoint()))
+                if moved:
+                    self._system_dragging = True
+                    self._drag_pos = None
+                    e.accept()
+                    return
+            self._system_dragging = False
             self._drag_pos = e.globalPosition().toPoint()
 
     def mouseMoveEvent(self, e):
+        if self._system_dragging:
+            return
         if self._drag_pos is not None:
             delta = e.globalPosition().toPoint() - self._drag_pos
             self.window().move(self.window().pos() + delta)
             self._drag_pos = e.globalPosition().toPoint()
 
     def mouseReleaseEvent(self, e):
+        self._system_dragging = False
         self._drag_pos = None
+        win = self.window()
+        end_drag = getattr(win, "_end_user_drag", None)
+        if callable(end_drag):
+            end_drag()
 
 
 class SettingsPopup(QWidget):
@@ -130,6 +159,7 @@ class SettingsPopup(QWidget):
         self.setAutoFillBackground(False)
 
         self.margin = margin
+        self._user_dragging = False
         self.setMinimumSize(560, 350)
         self.categories = categories or {}
 
@@ -152,7 +182,13 @@ class SettingsPopup(QWidget):
             item = QListWidgetItem(name)
             item.setSizeHint(QSize(172, 40))
             self.list.addItem(item)
-            self.stack.addWidget(widget)
+
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            scroll.setWidget(widget)
+            self.stack.addWidget(scroll)
 
         self.list.currentRowChanged.connect(self.stack.setCurrentIndex)
         if self.list.count():
@@ -179,17 +215,15 @@ class SettingsPopup(QWidget):
         content_layout.addWidget(self.stack)
         plate_layout.addLayout(content_layout)
 
-        grip_row = QHBoxLayout()
-        grip_row.setContentsMargins(0, 0, 2, 2)
-        grip_row.addStretch(1)
-        self._size_grip = QSizeGrip(self)
+        self._size_grip = QSizeGrip(self._plate)
+        self._size_grip.setFixedSize(14, 14)
         self._size_grip.setToolTip("Resize")
-        grip_row.addWidget(self._size_grip, 0, Qt.AlignRight | Qt.AlignBottom)
-        plate_layout.addLayout(grip_row)
 
         self.refresh_theme()
+        self._position_size_grip()
 
     def refresh_theme(self):
+        selection_color = getattr(tokens, "ACCENT", ORANGE_SELECTION)
         panel_bg = getattr(tokens, "COLOR_SETTINGS_BG", tokens.COLOR_BG_MAIN)
         panel_border = _with_alpha(tokens.BORDER_SUBTLE, 1.0)
         panel_outer = _with_alpha(tokens.BORDER_SUBTLE, 0.95)
@@ -197,6 +231,10 @@ class SettingsPopup(QWidget):
         input_focus_bg = tokens.BG_INPUT
         nav_bg = tokens.BG_INPUT
         stack_bg = tokens.BG_INPUT
+        item_hover_bg = _with_alpha(selection_color, 0.10 if _is_light(panel_bg) else 0.12)
+        item_hover_border = _with_alpha(selection_color, 0.35 if _is_light(panel_bg) else 0.42)
+        item_selected_bg = _with_alpha(selection_color, 0.18 if _is_light(panel_bg) else 0.22)
+        item_selected_border = _with_alpha(selection_color, 0.62 if _is_light(panel_bg) else 0.68)
 
         self.setStyleSheet(
             f"""
@@ -219,7 +257,7 @@ class SettingsPopup(QWidget):
             }}
             QLineEdit:focus {{
                 background: {input_focus_bg};
-                border: 1px solid {ORANGE_SELECTION};
+                border: 1px solid {selection_color};
             }}
             """
         )
@@ -241,25 +279,25 @@ class SettingsPopup(QWidget):
                 font-size: 15px;
             }}
             QListWidget::item:hover {{
-                background: rgba(255, 138, 61, 0.10);
-                border: 1px solid rgba(255, 138, 61, 0.35);
+                background: {item_hover_bg};
+                border: 1px solid {item_hover_border};
                 color: {tokens.TEXT_PRIMARY};
             }}
             QListWidget::item:selected {{
-                background: rgba(255, 138, 61, 0.18);
-                border: 1px solid rgba(255, 138, 61, 0.62);
-                color: {ORANGE_SELECTION};
+                background: {item_selected_bg};
+                border: 1px solid {item_selected_border};
+                color: {selection_color};
                 font-weight: 600;
             }}
             QListWidget::item:selected:active {{
-                background: rgba(255, 138, 61, 0.18);
-                border: 1px solid rgba(255, 138, 61, 0.62);
-                color: {ORANGE_SELECTION};
+                background: {item_selected_bg};
+                border: 1px solid {item_selected_border};
+                color: {selection_color};
             }}
             QListWidget::item:selected:!active {{
-                background: rgba(255, 138, 61, 0.18);
-                border: 1px solid rgba(255, 138, 61, 0.62);
-                color: {ORANGE_SELECTION};
+                background: {item_selected_bg};
+                border: 1px solid {item_selected_border};
+                color: {selection_color};
             }}
             """
         )
@@ -286,13 +324,28 @@ class SettingsPopup(QWidget):
         apply_native_titlebar_for_theme(self)
         for i in range(self.stack.count()):
             w = self.stack.widget(i)
-            if isinstance(w, QListWidget):
-                w.setStyleSheet(self._content_list_style())
-            refresh = getattr(w, "refresh_theme", None)
+            if isinstance(w, QScrollArea):
+                w.setStyleSheet(
+                    f"""
+                    QScrollArea {{
+                        border: none;
+                        background: {stack_bg};
+                    }}
+                    QScrollArea > QWidget > QWidget {{
+                        background: {stack_bg};
+                    }}
+                    """
+                )
+            target = w.widget() if isinstance(w, QScrollArea) else w
+            if isinstance(target, QListWidget):
+                target.setStyleSheet(self._content_list_style())
+            refresh = getattr(target, "refresh_theme", None)
             if callable(refresh):
                 refresh()
 
     def _content_list_style(self) -> str:
+        selection_color = getattr(tokens, "ACCENT", ORANGE_SELECTION)
+        selected_bg = _with_alpha(selection_color, 0.16 if _is_light(tokens.COLOR_BG_MAIN) else 0.18)
         return f"""
         QListWidget {{
             background: {_with_alpha(tokens.BG_INPUT, 0.88)};
@@ -306,8 +359,8 @@ class SettingsPopup(QWidget):
             border-radius: 6px;
         }}
         QListWidget::item:selected {{
-            background: rgba(255, 138, 61, 0.16);
-            color: {ORANGE_SELECTION};
+            background: {selected_bg};
+            color: {selection_color};
         }}
         """
 
@@ -315,23 +368,71 @@ class SettingsPopup(QWidget):
         win = self.parent()
         if win:
             win = win.window()
-
-        if win:
-            fg = win.frameGeometry().height()
-            g = win.geometry().height()
-            titlebar_h = max(0, fg - g)
-        else:
-            titlebar_h = 0
+            self.show_for_parent(win)
+            return
 
         x = parent_pos.x() + self.margin
-        y = parent_pos.y() + self.margin + titlebar_h
-
-        w = parent_size.width() - (self.margin * 2)
-        h = parent_size.height() - (self.margin * 2) - titlebar_h
-
+        y = parent_pos.y() + self.margin
+        w = max(self.minimumWidth(), parent_size.width() - (self.margin * 2))
+        h = max(self.minimumHeight(), parent_size.height() - (self.margin * 2))
         self.setGeometry(x, y, w, h)
         apply_native_titlebar_for_theme(self)
         self.show()
+
+    def show_for_parent(self, parent_window: QWidget | None) -> None:
+        if self._user_dragging:
+            return
+        if parent_window is None:
+            self.show()
+            return
+
+        host = parent_window.window()
+        host_geo = host.geometry()
+        host_top_left = host.mapToGlobal(QPoint(0, 0))
+        frame_h = host.frameGeometry().height()
+        titlebar_h = max(0, frame_h - host_geo.height())
+
+        desired_margin = max(8, int(self.margin))
+        max_margin_x = max(4, (host_geo.width() - self.minimumWidth()) // 2 - 4)
+        max_margin_y = max(4, (host_geo.height() - self.minimumHeight()) // 2 - 4)
+        margin_x = max(4, min(desired_margin, max_margin_x))
+        margin_y = max(4, min(desired_margin, max_margin_y))
+
+        available_w = max(320, host_geo.width() - 8)
+        available_h = max(220, host_geo.height() - 8)
+        target_w = min(available_w, max(self.minimumWidth(), host_geo.width() - (margin_x * 2)))
+        target_h = min(available_h, max(self.minimumHeight(), host_geo.height() - (margin_y * 2)))
+
+        x = host_top_left.x() + max(4, (host_geo.width() - target_w) // 2)
+        y = host_top_left.y() + titlebar_h + max(4, (host_geo.height() - target_h) // 2)
+
+        self.setGeometry(x, y, target_w, target_h)
+        apply_native_titlebar_for_theme(self)
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _position_size_grip(self) -> None:
+        if self._size_grip is None or self._plate is None:
+            return
+        inset = 6
+        x = max(0, self._plate.width() - self._size_grip.width() - inset)
+        y = max(0, self._plate.height() - self._size_grip.height() - inset)
+        self._size_grip.move(x, y)
+        self._size_grip.raise_()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._position_size_grip()
+
+    def _begin_user_drag(self) -> None:
+        self._user_dragging = True
+
+    def _end_user_drag(self) -> None:
+        self._user_dragging = False
+
+    def is_user_dragging(self) -> bool:
+        return self._user_dragging
 
 
 class FloatingMenu(QWidget):

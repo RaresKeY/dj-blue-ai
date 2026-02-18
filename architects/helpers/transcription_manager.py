@@ -150,6 +150,15 @@ class TranscriptionManager:
                 prompt=prompt,
                 structured=True,
             )
+
+            if result.get("error"):
+                print(f"[TranscriptionManager] API error: {result.get('error')}")
+                if self._callback:
+                    self._callback(result)
+                if result.get("limit_blocked"):
+                    # Stop loop to prevent repeated rate-limit spam.
+                    self.stop_recording()
+                return
             
             # Cleanup result
             result.pop("raw_response", None)

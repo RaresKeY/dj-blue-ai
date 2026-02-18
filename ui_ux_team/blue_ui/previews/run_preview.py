@@ -11,6 +11,7 @@ TARGET_TO_FILE = {
     "profile": "preview_profile_window.py",
     "transcript": "preview_transcript_window.py",
     "api": "preview_api_settings_window.py",
+    "settings": "preview_settings_popup.py",
     "api_flow": "preview_api_settings_flow.py",
     "widgets": "preview_widgets.py",
     "covers": "preview_cover_carousel.py",

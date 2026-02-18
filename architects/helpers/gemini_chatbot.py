@@ -3,6 +3,8 @@ from google.generativeai import caching
 import datetime
 import typing
 
+from ui_ux_team.blue_ui.app.api_usage_guard import record_usage, reserve_request
+
 # Default System Instruction from blue_bird_chat.py
 DEFAULT_SYSTEM_INSTRUCTION = (
     "You are a helpful analyst assistant whose knowledge is primarily grounded in the provided TRANSCRIPT. "
@@ -121,6 +123,10 @@ class GeminiChatbot:
         # Try context caching first when transcript has meaningful content.
         if len(transcript_for_cache) >= 1000:
             try:
+                allowed, reason = reserve_request("chat", model_name=self.model_name)
+                if not allowed:
+                    self.last_error = reason
+                    return False
                 print(f"--- Creating Context Cache (Model: {self.model_name}) ---")
                 self.cache = caching.CachedContent.create(
                     model=self.model_name,
@@ -129,6 +135,8 @@ class GeminiChatbot:
                     contents=[self.current_transcript],
                     ttl=datetime.timedelta(minutes=ttl_minutes)
                 )
+                # Cached-content create does not expose usage metadata in this code path.
+                record_usage(scope="chat", model_name=self.model_name, fallback_cost_usd=0.0)
                 self.model = genai.GenerativeModel.from_cached_content(cached_content=self.cache)
                 self.start_new_chat()
                 return True
@@ -182,6 +190,10 @@ class GeminiChatbot:
              return {"error": "Chat session not initialized. Please load a transcript first."}
 
         try:
+            allowed, reason = reserve_request("chat", model_name=self.model_name)
+            if not allowed:
+                return {"error": reason, "limit_blocked": True}
+
             response = self.chat_session.send_message(message)
             
             # Extract usage metadata if available
@@ -194,6 +206,7 @@ class GeminiChatbot:
                     "total_tokens": u.total_token_count,
                     "cached_tokens": getattr(u, "cached_content_token_count", 0)
                 }
+            record_usage(scope="chat", model_name=self.model_name, usage=usage)
 
             return {
                 "text": response.text,
