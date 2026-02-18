@@ -131,6 +131,14 @@ class APIUsageLimitsForm(QWidget):
         usage_form.addRow("RPD (Current Day)", self._current_rpd)
         usage_form.addRow("Monthly Spend", self._current_spend)
 
+        self._free_tier_note = QLabel(
+            "* Note: This is an estimated cost. If your API key is on a free tier (e.g. Gemini Flash free limits), "
+            "you will not actually be charged by the provider for that usage."
+        )
+        self._free_tier_note.setObjectName("apiUsageFreeTierNote")
+        self._free_tier_note.setWordWrap(True)
+        self._usage_section.content_layout().addWidget(self._free_tier_note)
+
         actions = QHBoxLayout()
         actions.setContentsMargins(0, 0, 0, 0)
         actions.setSpacing(6)
@@ -261,6 +269,12 @@ class APIUsageLimitsForm(QWidget):
                 font-size: 12px;
                 color: {status_color};
                 padding-top: 2px;
+            }}
+            QLabel#apiUsageFreeTierNote {{
+                font-size: 11px;
+                color: {tokens.TEXT_MUTED};
+                font-style: italic;
+                padding-top: 4px;
             }}
             """
         )

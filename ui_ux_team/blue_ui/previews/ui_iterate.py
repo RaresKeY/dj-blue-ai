@@ -237,6 +237,8 @@ def cmd_snap(args: argparse.Namespace) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
 
     if args.apply_theme:
+        if args.theme:
+            os.environ["DJ_BLUE_THEME_OVERRIDE"] = args.theme
         try:
             from ui_ux_team.blue_ui.theme import ensure_default_theme
 
@@ -305,6 +307,7 @@ def build_parser() -> argparse.ArgumentParser:
     snap.add_argument("--delay-ms", type=int, default=260, help="Wait time before capture (default: 260ms).")
     snap.add_argument("--offscreen", action="store_true", help="Set QT_QPA_PLATFORM=offscreen for headless captures.")
     snap.add_argument("--no-theme", action="store_true", help="Skip ensure_default_theme() before rendering.")
+    snap.add_argument("--theme", default="", help="Theme key to override default (e.g. bluebird_soft).")
     snap.set_defaults(func=cmd_snap)
 
     return parser

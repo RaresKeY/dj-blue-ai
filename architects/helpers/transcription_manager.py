@@ -182,15 +182,31 @@ class TranscriptionManager:
     @staticmethod
     def format_transcript_text(result: Dict[str, Any]) -> Optional[str]:
         """Formats the API result dict into a displayable string."""
-        if not result.get("text"):
+        text = result.get("text")
+        if not text:
             return None
 
-        def parse_none(txt):
-            return txt if isinstance(txt, str) else "MISSING"
+        summary = result.get("summary")
+        translation = result.get("translation")
+        emotion = result.get("emotion")
 
-        return (
-            "Transcript:\n" + parse_none(result.get("text")) + '\n\n' +
-            "Translation:\n" + parse_none(result.get("translation", "MISSING")) + '\n\n' +
-            "Summary:\n" + parse_none(result.get("summary", "MISSING")) + '\n\n' +
-            "Emotion: " + parse_none(result.get("emotion", "MISSING")) + '\n' + "---\n"
-        )
+        def clean(val):
+            if val is None or not str(val).strip() or str(val).upper() == "NULL":
+                return None
+            return str(val).strip()
+
+        out = f"Transcript:\n{text}\n\n"
+        
+        c_trans = clean(translation)
+        if c_trans:
+            out += f"Translation:\n{c_trans}\n\n"
+            
+        c_summ = clean(summary)
+        if c_summ:
+            out += f"Summary:\n{c_summ}\n\n"
+            
+        c_emo = clean(emotion)
+        if c_emo:
+            out += f"Emotion: {c_emo}\n"
+            
+        return out + "---\n"

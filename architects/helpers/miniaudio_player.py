@@ -135,6 +135,7 @@ class MiniaudioPlayer:
             try:
                 chunk = stream.send(request)
             except StopIteration:
+                self._running = False
                 return
 
             if isinstance(chunk, array.array):

@@ -229,6 +229,16 @@ class SettingsPopup(QWidget):
         self.refresh_theme()
         self._position_size_grip()
 
+    def set_active_tab(self, index_or_name: int | str):
+        if isinstance(index_or_name, int):
+            if 0 <= index_or_name < self.list.count():
+                self.list.setCurrentRow(index_or_name)
+        elif isinstance(index_or_name, str):
+            for i in range(self.list.count()):
+                if self.list.item(i).text() == index_or_name:
+                    self.list.setCurrentRow(i)
+                    break
+
     def refresh_theme(self):
         selection_color = getattr(tokens, "ACCENT", ORANGE_SELECTION)
         panel_bg = getattr(tokens, "COLOR_SETTINGS_BG", tokens.COLOR_BG_MAIN)
@@ -336,10 +346,10 @@ class SettingsPopup(QWidget):
                     f"""
                     QScrollArea {{
                         border: none;
-                        background: {stack_bg};
+                        background: transparent;
                     }}
                     QScrollArea > QWidget > QWidget {{
-                        background: {stack_bg};
+                        background: transparent;
                     }}
                     """
                 )

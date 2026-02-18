@@ -143,6 +143,10 @@ def _resolve_contrast_text(bg_color: str, preferred_text: str, minimum_ratio: fl
     return white.name() if _contrast_ratio(white, bg) >= _contrast_ratio(black, bg) else black.name()
 
 
+def _is_light_color(value: str, fallback: str = "#1E1E1E") -> bool:
+    return _parse_color(value, fallback).lightnessF() >= 0.55
+
+
 class MainUI(QWidget):
     transcript_ready = Signal(dict)
     _AUDIO_EXTS = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"}
@@ -945,25 +949,35 @@ class MainUI(QWidget):
         music_layout = QVBoxLayout(music_tab)
         music_layout.setContentsMargins(8, 8, 8, 8)
         music_layout.setSpacing(10)
+        
         music_label = QLabel("Music folder")
         music_label.setStyleSheet(f"color: {theme_tokens.TEXT_PRIMARY}; font-size: 14px; font-weight: 600;")
+        
         self._music_path_edit = QLineEdit(str(self._music_folder))
         self._music_path_edit.setReadOnly(True)
+        
+        bg_main = getattr(theme_tokens, "COLOR_BG_MAIN", "#1E1E1E")
+        is_light_bg = _is_light_color(bg_main)
+        
+        btn_bg = _color_with_alpha(selection_color, 0.11 if is_light_bg else 0.14, selection_color)
+        btn_border = _color_with_alpha(selection_color, 0.62, selection_color)
+        btn_hover = _color_with_alpha(selection_color, 0.22, selection_color)
+        
         music_pick_btn = QPushButton("Choose folder")
         music_pick_btn.clicked.connect(self._pick_music_folder)
         music_pick_btn.setStyleSheet(
-            """
-            QPushButton {
-                background: rgba(255, 138, 61, 0.14);
-                color: #FF8A3D;
-                border: 1px solid rgba(255, 138, 61, 0.62);
+            f"""
+            QPushButton {{
+                background: {btn_bg};
+                color: {selection_color};
+                border: 1px solid {btn_border};
                 border-radius: 8px;
                 padding: 8px 12px;
                 font-weight: 600;
-            }
-            QPushButton:hover {
-                background: rgba(255, 138, 61, 0.22);
-            }
+            }}
+            QPushButton:hover {{
+                background: {btn_hover};
+            }}
             """
         )
         music_layout.addWidget(music_label)
@@ -1163,6 +1177,10 @@ class MainUI(QWidget):
     def play_click(self, file_path=None):
         file_path = file_path or self._currently_playing
 
+        # If player finished but instance still exists, clear it to allow restart.
+        if self._player is not None and not self._player.is_playing() and not self._player.paused:
+            self._player = None
+
         if self._player is None:
             real_path = self._resolve_music_path(file_path)
             if real_path is None:
@@ -1295,7 +1313,8 @@ class MainUI(QWidget):
             return
         if self._player is None:
             self._timeline.set_duration(self._timeline_dummy_duration)
-            self._timeline.set_position(self._timeline_dummy_position)
+            # Set a visual default for snapshots/idle state (approx 30%)
+            self._timeline.set_position(self._timeline_dummy_duration * 0.3)
             return
         duration = self._player.duration_seconds() if hasattr(self._player, "duration_seconds") else 0.0
         position = self._player.position_seconds() if hasattr(self._player, "position_seconds") else 0.0

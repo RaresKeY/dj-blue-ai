@@ -9,9 +9,14 @@ if str(project_root) not in sys.path:
 from ui_ux_team.blue_ui.views.profile_window import ProfileWindowView
 
 
+class ProfileWindowPreview(ProfileWindowView):
+    def __init__(self):
+        super().__init__()
+        self.resize(380, 460)
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = ProfileWindowView()
-    window.resize(380, 460)
+    window = ProfileWindowPreview()
     window.show()
-    raise SystemExit(app.exec())
+    sys.exit(app.exec())

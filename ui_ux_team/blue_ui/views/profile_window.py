@@ -1,10 +1,24 @@
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame
 
 from architects.helpers.resource_path import resource_path
 from ui_ux_team.blue_ui.theme import tokens
 from ui_ux_team.blue_ui.theme.native_window import apply_native_titlebar_for_theme
+
+
+def _parse_color(value: str, fallback: str) -> QColor:
+    color = QColor((value or "").strip())
+    if color.isValid():
+        return color
+    fallback_color = QColor(fallback)
+    return fallback_color if fallback_color.isValid() else QColor("#FFFFFF")
+
+
+def _with_alpha(value: str, alpha: float, fallback: str = "#FFFFFF") -> str:
+    c = _parse_color(value, fallback)
+    a = max(0.0, min(1.0, float(alpha)))
+    return f"rgba({c.red()}, {c.green()}, {c.blue()}, {a:.3f})"
 
 
 class ProfileWindowView(QWidget):
@@ -64,6 +78,9 @@ class ProfileWindowView(QWidget):
         self.refresh_theme()
 
     def refresh_theme(self):
+        bg_alpha = _with_alpha(tokens.TEXT_PRIMARY, 0.04)
+        card_alpha = _with_alpha(tokens.TEXT_PRIMARY, 0.03)
+        
         self.setStyleSheet(
             f"""
             QWidget {{
@@ -80,12 +97,12 @@ class ProfileWindowView(QWidget):
                 color: {tokens.TEXT_MUTED};
             }}
             QLabel#profileAvatar {{
-                background: rgba(255, 255, 255, 0.04);
+                background: {bg_alpha};
                 border: 1px solid {tokens.BORDER_SUBTLE};
                 border-radius: 36px;
             }}
             QFrame#profileCard {{
-                background: rgba(255, 255, 255, 0.03);
+                background: {card_alpha};
                 border: 1px solid {tokens.BORDER_SUBTLE};
                 border-radius: 10px;
             }}

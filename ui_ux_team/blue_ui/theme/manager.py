@@ -55,7 +55,14 @@ def set_theme(theme_key: str) -> str:
     return theme_key
 
 
+import os
+
 def ensure_default_theme() -> str:
+    # Check for runtime override first (useful for automated snapshots/testing)
+    override = os.environ.get("DJ_BLUE_THEME_OVERRIDE")
+    if override in THEMES:
+        return set_theme(override)
+
     saved = _load_theme_key()
     if saved in THEMES:
         return set_theme(saved)

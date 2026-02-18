@@ -9,10 +9,15 @@ if str(project_root) not in sys.path:
 from ui_ux_team.blue_ui.views.transcript_window import TranscriptWindowView
 
 
+class TranscriptWindowPreview(TranscriptWindowView):
+    def __init__(self):
+        super().__init__()
+        self.append_segment("[00:00:00 - 00:00:30] Preview transcript segment")
+        self.resize(500, 700)
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = TranscriptWindowView()
-    window.append_segment("[00:00:00 - 00:00:30] Preview transcript segment")
-    window.resize(500, 700)
+    window = TranscriptWindowPreview()
     window.show()
-    raise SystemExit(app.exec())
+    sys.exit(app.exec())

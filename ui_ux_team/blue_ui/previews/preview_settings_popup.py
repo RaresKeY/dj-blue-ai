@@ -11,8 +11,8 @@ if str(project_root) not in sys.path:
 
 from architects.helpers.tabs_audio import get_display_names
 from ui_ux_team.blue_ui.config import default_music_folder
-from ui_ux_team.blue_ui.theme import ensure_default_theme, set_theme
-from ui_ux_team.blue_ui.views.settings_popup import SettingsPopup
+from ui_ux_team.blue_ui.theme import ensure_default_theme, set_theme, tokens
+from ui_ux_team.blue_ui.views.settings_popup import SettingsPopup, _with_alpha, _is_light
 from ui_ux_team.blue_ui.widgets.api_usage_limits_form import APIUsageLimitsForm
 from ui_ux_team.blue_ui.widgets.theme_chooser import ThemeChooserMenu
 
@@ -33,11 +33,38 @@ def _build_music_tab() -> QWidget:
     layout = QVBoxLayout(music_tab)
     layout.setContentsMargins(8, 8, 8, 8)
     layout.setSpacing(10)
+    
     title = QLabel("Music folder")
-    title.setStyleSheet("font-size: 14px; font-weight: 600;")
+    title.setStyleSheet(f"color: {tokens.TEXT_PRIMARY}; font-size: 14px; font-weight: 600;")
+    
     path_edit = QLineEdit(str(default_music_folder()))
     path_edit.setReadOnly(True)
+    
+    selection_color = getattr(tokens, "ACCENT", "#FF8A3D")
+    bg_main = getattr(tokens, "COLOR_BG_MAIN", "#1E1E1E")
+    is_light = _is_light(bg_main)
+    
+    btn_bg = _with_alpha(selection_color, 0.11 if is_light else 0.14)
+    btn_border = _with_alpha(selection_color, 0.62)
+    btn_hover = _with_alpha(selection_color, 0.22)
+    
     pick_btn = QPushButton("Choose folder")
+    pick_btn.setStyleSheet(
+        f"""
+        QPushButton {{
+            background: {btn_bg};
+            color: {selection_color};
+            border: 1px solid {btn_border};
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-weight: 600;
+        }}
+        QPushButton:hover {{
+            background: {btn_hover};
+        }}
+        """
+    )
+    
     layout.addWidget(title)
     layout.addWidget(path_edit)
     layout.addWidget(pick_btn, alignment=Qt.AlignLeft)
@@ -75,10 +102,10 @@ class SettingsPopupPreview(SettingsPopup):
             parent=None,
             margin=24,
         )
-        for idx in range(self.list.count()):
-            if self.list.item(idx).text() == "API Usage Limits":
-                self.list.setCurrentRow(idx)
-                break
+        # Allow setting specific tab for automated snapshots
+        tab_hint = os.environ.get("DJ_BLUE_SETTINGS_TAB", "API Usage Limits")
+        self.set_active_tab(tab_hint)
+        
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
         self.setWindowTitle("Settings Popup Preview")
         self.resize(940, 620)
