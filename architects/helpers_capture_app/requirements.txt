@@ -1,2 +1,0 @@
-sounddevice
-PyGObject; platform_system == "Linux"
