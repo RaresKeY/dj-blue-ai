@@ -25,6 +25,8 @@ dist-ssr
 **/__pycache__/
 .env
 .aider*
+.python-version
+pyproject.toml
 
 # Managed Mem
 managed_mem.json
