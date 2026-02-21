@@ -17,7 +17,7 @@ We will aggressively remove files that are no longer referenced, deprecated prot
 
 ### 1.2 Deprecated Directories
 - [ ] **Delete**: `ui_ux_team/prototype_r/` (Entire folder is legacy).
-- [ ] **Delete**: `architects/helpers_capture_app/` (Empty or unused).
+- [x] **Delete**: deprecated capture-helper package (removed; no active production imports).
 - [ ] **Delete**: `music_librarians/` (Appears unused or needs explicit integration plan).
 - [ ] **Delete**: `djs/`, `front_end_engineers/`, `gui_developers/` (Empty `.gitkeep` placeholders).
 
