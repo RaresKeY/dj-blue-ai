@@ -16,7 +16,3 @@
 | [Data Model](data_model.md) | `architects/helpers/managed_mem.py`, `ui_ux_team/blue_ui/app/services.py` | Persisted config/state contracts and managed memory storage behavior. |
 | [Quality & Testing](quality_testing.md) | `ui_ux_team/blue_ui/tests/test_button_clicks.py`, `architects/tests/test_logic.py`, `architects/tests/test_song.py`, `.github/workflows/build.yml` | Test coverage, CI checks, and known quality gaps. |
 | [Operational Notes](operational_notes.md) | `AGENTS.md`, `ui_ux_team/blue_ui/docs/UI_WORKFLOW.md`, `architects/design_docs/TAGGING_GUIDE.md`, `build_*.py` | Runtime setup, UI iteration workflow, and release/build operations. |
-
-## Templates
-
-- [Specs Template Library](../specs_templates/README.md): Reusable templates kept separate from ground-truth specs.
