@@ -1354,9 +1354,7 @@ class MainUI(QWidget):
                     continue
                 if window.isMinimized():
                     window.showNormal()
-            # Avoid forcing z-order for every managed window on each activation event.
             if active_window is not None and active_window in windows:
-                active_window.raise_()
                 active_window.activateWindow()
         finally:
             self._restoring_managed_windows = False

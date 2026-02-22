@@ -333,7 +333,6 @@ class APISettingsWindowView(QWidget):
             """
         )
         apply_native_titlebar_for_theme(self)
-        self.refresh_status()
 
     def closeEvent(self, event):
         self.closed.emit()
