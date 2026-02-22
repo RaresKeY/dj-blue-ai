@@ -167,21 +167,11 @@ class _TkBootstrapLoader:
 
         width = 560
         height = 220
-        vroot_x = int(self._root.winfo_vrootx())
-        vroot_y = int(self._root.winfo_vrooty())
-        vroot_w = int(self._root.winfo_vrootwidth())
-        vroot_h = int(self._root.winfo_vrootheight())
-
-        pointer_x = int(self._root.winfo_pointerx())
-        pointer_y = int(self._root.winfo_pointery())
-        if pointer_x <= 0 and pointer_y <= 0:
-            pointer_x = vroot_x + (vroot_w // 2)
-            pointer_y = vroot_y + (vroot_h // 2)
-
-        x = pointer_x - (width // 2)
-        y = pointer_y - (height // 2)
-        x = max(vroot_x, min(x, (vroot_x + vroot_w) - width))
-        y = max(vroot_y, min(y, (vroot_y + vroot_h) - height))
+        mon_x, mon_y, mon_w, mon_h = self._target_monitor_bounds()
+        x = mon_x + ((mon_w - width) // 2)
+        y = mon_y + ((mon_h - height) // 2)
+        x = max(mon_x, min(x, (mon_x + mon_w) - width))
+        y = max(mon_y, min(y, (mon_y + mon_h) - height))
         self._root.geometry(f"{width}x{height}+{x}+{y}")
 
         frame = tk.Frame(
@@ -259,6 +249,80 @@ class _TkBootstrapLoader:
         self._estimated_total_s = 6.0
         self._start_ts = time.perf_counter()
         self._closed = False
+
+    def _target_monitor_bounds(self) -> tuple[int, int, int, int]:
+        vroot_x = int(self._root.winfo_vrootx())
+        vroot_y = int(self._root.winfo_vrooty())
+        vroot_w = int(self._root.winfo_vrootwidth())
+        vroot_h = int(self._root.winfo_vrootheight())
+
+        if vroot_w <= 0 or vroot_h <= 0:
+            return (0, 0, int(self._root.winfo_screenwidth()), int(self._root.winfo_screenheight()))
+
+        pointer_x = int(self._root.winfo_pointerx())
+        pointer_y = int(self._root.winfo_pointery())
+
+        win_mon = self._windows_monitor_bounds(pointer_x, pointer_y)
+        if win_mon is not None:
+            return win_mon
+
+        screen_w = int(self._root.winfo_screenwidth())
+        screen_h = int(self._root.winfo_screenheight())
+        if screen_w > 0 and screen_h > 0 and pointer_x > 0 and pointer_y > 0:
+            col = int((pointer_x - vroot_x) // screen_w)
+            row = int((pointer_y - vroot_y) // screen_h)
+            mon_x = vroot_x + (col * screen_w)
+            mon_y = vroot_y + (row * screen_h)
+            mon_x = max(vroot_x, min(mon_x, (vroot_x + vroot_w) - screen_w))
+            mon_y = max(vroot_y, min(mon_y, (vroot_y + vroot_h) - screen_h))
+            return (mon_x, mon_y, screen_w, screen_h)
+
+        return (vroot_x, vroot_y, vroot_w, vroot_h)
+
+    @staticmethod
+    def _windows_monitor_bounds(pointer_x: int, pointer_y: int) -> tuple[int, int, int, int] | None:
+        if not sys.platform.startswith("win"):
+            return None
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class RECT(ctypes.Structure):
+                _fields_ = [
+                    ("left", ctypes.c_long),
+                    ("top", ctypes.c_long),
+                    ("right", ctypes.c_long),
+                    ("bottom", ctypes.c_long),
+                ]
+
+            class MONITORINFO(ctypes.Structure):
+                _fields_ = [
+                    ("cbSize", wintypes.DWORD),
+                    ("rcMonitor", RECT),
+                    ("rcWork", RECT),
+                    ("dwFlags", wintypes.DWORD),
+                ]
+
+            user32 = ctypes.windll.user32
+            point = wintypes.POINT(pointer_x, pointer_y)
+            monitor = user32.MonitorFromPoint(point, 2)  # MONITOR_DEFAULTTONEAREST
+            if not monitor:
+                return None
+
+            info = MONITORINFO()
+            info.cbSize = ctypes.sizeof(MONITORINFO)
+            if not user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+                return None
+
+            left = int(info.rcWork.left)
+            top = int(info.rcWork.top)
+            width = int(info.rcWork.right - info.rcWork.left)
+            height = int(info.rcWork.bottom - info.rcWork.top)
+            if width <= 0 or height <= 0:
+                return None
+            return (left, top, width, height)
+        except Exception:
+            return None
 
     def start(self, estimated_total_seconds: float, initial_status: str = "Starting app bootstrap...") -> None:
         self._estimated_total_s = max(1.0, float(estimated_total_seconds))

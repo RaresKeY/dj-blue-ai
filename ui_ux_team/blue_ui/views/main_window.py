@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, Signal, QTimer
-from PySide6.QtGui import QPalette, QColor, QPixmap, QFont, QIcon
+from PySide6.QtGui import QPalette, QColor, QPixmap, QFont, QIcon, QGuiApplication, QCursor
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -200,6 +200,7 @@ class MainUI(QWidget):
         self._startup_preflight_shown = False
         self._startup_cycle_popup = None
         self._restoring_managed_windows = False
+        self._did_initial_center = False
 
         self.root = QVBoxLayout(self)
         self.root.setContentsMargins(0, 0, 0, 0)
@@ -1503,6 +1504,9 @@ class MainUI(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        if not self._did_initial_center:
+            self._did_initial_center = True
+            QTimer.singleShot(0, self._center_on_screen)
         if self.transcription_manager is None:
             QTimer.singleShot(0, lambda: self._refresh_transcription_manager(initial=False))
         QTimer.singleShot(220, self._show_transcript_hint_arrow)
@@ -1513,6 +1517,15 @@ class MainUI(QWidget):
 
     def moveEvent(self, event):
         super().moveEvent(event)
+
+    def _center_on_screen(self) -> None:
+        screen = QGuiApplication.screenAt(QCursor.pos()) or self.screen() or QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        available = screen.availableGeometry()
+        frame = self.frameGeometry()
+        frame.moveCenter(available.center())
+        self.move(frame.topLeft())
 
 
 MainWindowView = MainUI

@@ -18,7 +18,7 @@
 - Initialize config (`ensure_config_initialized()`).
 - Apply persisted/default theme (`ensure_default_theme()`).
 - Compose services and main window through `AppComposer`.
-- Show main window and enter Qt event loop.
+- Show main window centered on screen and enter Qt event loop.
 
 ## API Key Resolution Order
 - Runtime in-memory key (`runtime_api_key()`).
@@ -41,3 +41,4 @@
 - Active runtime behavior is defined by Blue UI startup/composition modules.
 - API-key-dependent features remain unavailable when no key resolves.
 - Secret persistence is keyring-centric with explicit fallback behavior controls.
+- Startup loading window and main application window open on a single monitor and center on that monitor (cursor/active monitor preferred, then fallback), across source and frozen runtime modes.
