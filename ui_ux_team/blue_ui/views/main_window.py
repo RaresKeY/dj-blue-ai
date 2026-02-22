@@ -1349,13 +1349,11 @@ class MainUI(QWidget):
         try:
             windows = self._managed_windows()
             for window in windows:
+                if window is active_window:
+                    continue
                 if window.isMinimized():
                     window.showNormal()
-                    window.raise_()
-                elif window.isVisible():
-                    # Just raise, don't call show() or move() to avoid snapping
-                    window.raise_()
-            
+            # Avoid forcing z-order for every managed window on each activation event.
             if active_window is not None and active_window in windows:
                 active_window.raise_()
                 active_window.activateWindow()
@@ -1363,7 +1361,7 @@ class MainUI(QWidget):
             self._restoring_managed_windows = False
 
     def eventFilter(self, watched, event):
-        if event.type() == QEvent.WindowActivate and watched in self._managed_windows():
+        if event.type() == QEvent.WindowActivate and watched is self:
             self._restore_open_managed_windows(active_window=watched)
         return super().eventFilter(watched, event)
 

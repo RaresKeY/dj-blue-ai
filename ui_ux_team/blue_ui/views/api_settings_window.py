@@ -1,3 +1,5 @@
+import threading
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, QLineEdit, QFrame
@@ -40,6 +42,7 @@ def _status_error_color(bg_color: str) -> str:
 class APISettingsWindowView(QWidget):
     closed = Signal()
     api_key_saved = Signal()
+    _op_result = Signal(str, object)
 
     def __init__(self, parent=None):
         super().__init__()
@@ -67,6 +70,9 @@ class APISettingsWindowView(QWidget):
         self.status = QLabel("")
         self.status.setObjectName("apiSettingsStatus")
         self.status.setWordWrap(True)
+        self._busy = False
+        self._op_seq = 0
+        self._latest_applied_seq = 0
 
         key_row = QHBoxLayout()
         key_row.setSpacing(8)
@@ -75,20 +81,20 @@ class APISettingsWindowView(QWidget):
         self.key_input.setPlaceholderText("Paste AI_STUDIO_API_KEY here")
         self.key_input.returnPressed.connect(self._save_key)
 
-        save_btn = QPushButton("Save Securely")
-        save_btn.clicked.connect(self._save_key)
+        self._save_btn = QPushButton("Save Securely")
+        self._save_btn.clicked.connect(self._save_key)
 
         key_row.addWidget(self.key_input, 1)
-        key_row.addWidget(save_btn, 0)
+        key_row.addWidget(self._save_btn, 0)
 
         action_row = QHBoxLayout()
         action_row.setSpacing(8)
-        clear_btn = QPushButton("Clear Stored Key")
-        clear_btn.clicked.connect(self._clear_key)
-        refresh_btn = QPushButton("Refresh Status")
-        refresh_btn.clicked.connect(self.refresh_status)
-        action_row.addWidget(clear_btn, 0)
-        action_row.addWidget(refresh_btn, 0)
+        self._clear_btn = QPushButton("Clear Stored Key")
+        self._clear_btn.clicked.connect(self._clear_key)
+        self._refresh_btn = QPushButton("Refresh Status")
+        self._refresh_btn.clicked.connect(self.refresh_status)
+        action_row.addWidget(self._clear_btn, 0)
+        action_row.addWidget(self._refresh_btn, 0)
         action_row.addStretch(1)
 
         hints_card = QFrame()
@@ -120,6 +126,7 @@ class APISettingsWindowView(QWidget):
         root.addWidget(self.status)
         root.addWidget(hints_card)
         root.addStretch(1)
+        self._op_result.connect(self._handle_op_result)
         self.refresh_theme()
         self.refresh_status()
 
@@ -131,15 +138,124 @@ class APISettingsWindowView(QWidget):
         )
 
     def refresh_status(self):
+        self._start_background_op("refresh", self._read_status_state, "Checking keyring status...")
+
+    def _save_key(self):
+        secret = self.key_input.text()
+        self._start_background_op(
+            "save",
+            lambda: self._save_status_state(secret),
+            "Saving API key securely...",
+        )
+
+    def _clear_key(self):
+        self._start_background_op("clear", self._clear_status_state, "Clearing stored API key...")
+
+    def _set_busy(self, busy: bool, status_message: str | None = None) -> None:
+        self._busy = bool(busy)
+        self.key_input.setEnabled(not self._busy)
+        self._save_btn.setEnabled(not self._busy)
+        self._clear_btn.setEnabled(not self._busy)
+        self._refresh_btn.setEnabled(not self._busy)
+        if status_message:
+            self._set_status(status_message, is_error=False)
+
+    def _start_background_op(self, op_name: str, fn, busy_message: str) -> None:
+        self._op_seq += 1
+        seq = self._op_seq
+        self._set_busy(True, busy_message)
+
+        def _worker() -> None:
+            try:
+                payload = fn()
+            except Exception as exc:
+                payload = {
+                    "ok": False,
+                    "message": f"Operation failed: {exc}",
+                    "key": "",
+                    "error": str(exc),
+                    "runtime_key": "",
+                    "runtime_source": "",
+                }
+            self._op_result.emit(op_name, {"seq": seq, "payload": payload})
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    @staticmethod
+    def _read_status_state() -> dict[str, object]:
         key, error = read_api_key()
+        return {
+            "ok": True,
+            "message": "",
+            "key": key or "",
+            "error": error or "",
+            "runtime_key": runtime_api_key(),
+            "runtime_source": runtime_api_key_source(),
+        }
+
+    @staticmethod
+    def _save_status_state(secret: str) -> dict[str, object]:
+        ok, message = save_api_key(secret)
+        key, error = read_api_key()
+        return {
+            "ok": bool(ok),
+            "message": str(message or ""),
+            "key": key or "",
+            "error": error or "",
+            "runtime_key": runtime_api_key(),
+            "runtime_source": runtime_api_key_source(),
+        }
+
+    @staticmethod
+    def _clear_status_state() -> dict[str, object]:
+        ok, message = clear_api_key()
+        key, error = read_api_key()
+        return {
+            "ok": bool(ok),
+            "message": str(message or ""),
+            "key": key or "",
+            "error": error or "",
+            "runtime_key": runtime_api_key(),
+            "runtime_source": runtime_api_key_source(),
+        }
+
+    def _handle_op_result(self, op_name: str, data: object) -> None:
+        if not isinstance(data, dict):
+            self._set_busy(False)
+            self._set_status("Unexpected background operation result.", is_error=True)
+            return
+
+        seq = int(data.get("seq", 0))
+        if seq < self._latest_applied_seq:
+            return
+        self._latest_applied_seq = seq
+        self._set_busy(False)
+
+        payload = data.get("payload")
+        if not isinstance(payload, dict):
+            self._set_status("Unexpected background operation payload.", is_error=True)
+            return
+
+        key = str(payload.get("key", "") or "")
+        runtime_key = str(payload.get("runtime_key", "") or "")
+        runtime_source = str(payload.get("runtime_source", "") or "runtime")
+        error = str(payload.get("error", "") or "")
+        message = str(payload.get("message", "") or "")
+        ok = bool(payload.get("ok", True))
+
+        if message:
+            self._set_status(message, is_error=not ok)
+        if op_name == "save" and ok:
+            self.api_key_saved.emit()
+            self.key_input.clear()
+
         if key:
             masked = f"{key[:4]}...{key[-4:]}" if len(key) >= 8 else "***"
             self._set_status(f"Stored key detected in keyring ({masked}).")
             return
-        runtime_key = runtime_api_key()
         if runtime_key:
             masked = f"{runtime_key[:4]}...{runtime_key[-4:]}" if len(runtime_key) >= 8 else "***"
-            source = runtime_api_key_source() or "runtime"
+            source = runtime_source or "runtime"
             self._set_status(
                 f"Runtime key active from {source} ({masked}). Not stored in keyring.",
                 is_error=False,
@@ -149,19 +265,6 @@ class APISettingsWindowView(QWidget):
             self._set_status(f"No key available. {error}", is_error=True)
             return
         self._set_status("No stored key found. Save one to enable transcription.", is_error=True)
-
-    def _save_key(self):
-        ok, message = save_api_key(self.key_input.text())
-        self._set_status(message, is_error=not ok)
-        if ok:
-            self.api_key_saved.emit()
-            self.key_input.clear()
-        self.refresh_status()
-
-    def _clear_key(self):
-        ok, message = clear_api_key()
-        self._set_status(message, is_error=not ok)
-        self.refresh_status()
 
     def refresh_theme(self):
         bg_main = getattr(tokens, "COLOR_BG_MAIN", "#1E1E1E")

@@ -31,6 +31,7 @@
 - Development mode uses repo-adjacent config/music locations.
 - Frozen/AppImage mode uses user config/data directories by platform.
 - Keyring is the primary persisted secret store; runtime key state is mirrored in process globals.
+- API settings UI runs keyring read/save/clear operations on a background thread so the main UI stays responsive during first-time backend initialization.
 
 ## Operational Utility Scripts
 - `scripts/debug_models.py` inspects available model metadata/methods through `GenAIClient`.
