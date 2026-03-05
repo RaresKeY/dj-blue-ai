@@ -9,8 +9,10 @@
 ## Automated Tests In Repository
 - UI smoke tests: `ui_ux_team/blue_ui/tests/test_button_clicks.py`.
 - UI smoke coverage includes sidebar actions, transport controls, and BlueBird window toggling with patched fake player.
+- UI smoke coverage also includes transcript recording toggle regression checks for transcription-manager start/stop failure handling.
 - Core logic tests: `architects/tests/test_logic.py`.
 - Core logic coverage includes `ManagedMem`, API usage guard state accounting, mocked LLM calls, and optional real API checks.
+- Core logic coverage includes transcription-manager guard behavior for recorder start/stop failures and cleanup semantics.
 - Domain object persistence tests: `architects/tests/test_song.py`.
 - Persistence coverage verifies `Song` serialization/roundtrip via managed memory storage.
 - Test package support file: `architects/tests/__init__.py`.
@@ -43,3 +45,5 @@
 - UI tests emphasize click/no-crash behavior over visual/geometry assertions in core test suite (visual checks are handled via preview snapshot workflow).
 - Visual QA is documented and screenshot-driven (`snap_gallery.py`, visual audit reports), but it is not a strict CI gate.
 - Legacy modules in `transcribers/`, `the_listeners/`, and `ui_ux_team/prototype_r/` are not covered by the active Blue UI smoke tests and may drift.
+- Backlog currently tracks a known runtime issue: "Transcription crashes on windows" (`BACKLOG.txt`).
+- No automated Windows-specific recording/transcription smoke test currently validates `TranscriptionManager.start_recording()` with non-Linux `AudioController` device selection/fallback behavior.

@@ -11,6 +11,7 @@
 ## Transcription Flow
 - `TranscriptionManager` requires an API key at construction and raises `ValueError` if empty.
 - On Linux, recording uses `LiveMixerController`; on other platforms it uses `AudioController`.
+- Recorder startup failures in `TranscriptionManager.start_recording()` now clean up partial recorder state and raise a `RuntimeError` instead of leaving recording half-initialized.
 - Worker loop polls recorder chunks (`pop_combined_stereo()`), converts PCM to WAV, optionally adds audio analysis tags, and calls `LLMUtilitySuite.transcribe_audio_bytes(...)`.
 - Structured transcription is requested with `response_mime_type = application/json` in `LLMUtilitySuite.transcribe_audio(...)`.
 
@@ -44,3 +45,4 @@
 - No transcription manager without API key.
 - No chat send without initialized chat context/session.
 - API usage limits are enforced before network request execution paths.
+- Recording toggle in `MainWindowView.record_transcript()` guards start/stop exceptions and always re-syncs transcript UI recording state after failures.

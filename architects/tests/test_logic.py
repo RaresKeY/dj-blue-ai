@@ -20,6 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from architects.helpers.managed_mem import ManagedMem
 from ui_ux_team.blue_ui.app import api_usage_guard
 from architects.helpers.api_utils import LLMUtilitySuite
+from architects.helpers.transcription_manager import TranscriptionManager
 from ui_ux_team.blue_ui.app.secure_api_key import read_api_key, set_runtime_api_key, RUNTIME_SOURCE_DOTENV
 from ui_ux_team.blue_ui import settings as app_settings
 
@@ -96,6 +97,64 @@ class TestLLMUtilitySuite(unittest.TestCase):
         mock_session.send_message.return_value = {"text": "hello from AI"}
         res = LLMUtilitySuite.send_chat_message(mock_session, "hello")
         self.assertEqual(res, "hello from AI")
+
+
+class TestTranscriptionManagerGuards(unittest.TestCase):
+    class _StartFailRecorder:
+        def __init__(self):
+            self.stop_calls = 0
+            self.close_calls = 0
+
+        def start(self):
+            raise RuntimeError("device open failed")
+
+        def stop(self):
+            self.stop_calls += 1
+
+        def close(self):
+            self.close_calls += 1
+
+    class _StopCloseFailRecorder:
+        def start(self):
+            return None
+
+        def stop(self):
+            raise RuntimeError("stop failed")
+
+        def close(self):
+            raise RuntimeError("close failed")
+
+    def setUp(self):
+        self.llm_patcher = patch("architects.helpers.transcription_manager.LLMUtilitySuite")
+        self.mock_llm_cls = self.llm_patcher.start()
+        self.mock_llm_cls.return_value = MagicMock()
+
+    def tearDown(self):
+        self.llm_patcher.stop()
+
+    def test_start_recording_windows_failure_resets_state(self):
+        recorder = self._StartFailRecorder()
+        with patch("architects.helpers.transcription_manager.os_info", return_value={"system": "Windows"}):
+            with patch("architects.helpers.transcription_manager.AudioController", return_value=recorder):
+                manager = TranscriptionManager(api_key="test_key", chunk_seconds=1)
+                with self.assertRaises(RuntimeError):
+                    manager.start_recording()
+
+        self.assertIsNone(manager._recorder)
+        self.assertFalse(manager._is_recording)
+        self.assertIsNone(manager._worker_thread)
+        self.assertEqual(recorder.stop_calls, 1)
+        self.assertEqual(recorder.close_calls, 1)
+
+    def test_stop_recording_swallows_recorder_errors(self):
+        manager = TranscriptionManager(api_key="test_key", chunk_seconds=1)
+        manager._recorder = self._StopCloseFailRecorder()
+        manager._is_recording = True
+
+        manager.stop_recording()
+
+        self.assertFalse(manager._is_recording)
+        self.assertIsNone(manager._recorder)
 
 
 class TestLLMRealAPI(unittest.TestCase):

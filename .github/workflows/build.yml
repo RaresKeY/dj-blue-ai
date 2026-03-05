@@ -50,6 +50,52 @@ jobs:
         python -c "import pathlib,sys; p=pathlib.Path('ui_ux_team/blue_ui/app/main.py'); sys.exit(0 if p.exists() else 1)"
         python build_binary.py
 
+    - name: Build Windows Debug Binary
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        python - <<'PY'
+        import os
+        from pathlib import Path
+        import PyInstaller.__main__
+
+        base_dir = Path(".").resolve()
+        entry_point = base_dir / "ui_ux_team" / "blue_ui" / "app" / "main.py"
+        assets_source = base_dir / "ui_ux_team" / "assets"
+        mood_data_source = base_dir / "mood_readers" / "data"
+        icon_candidate = base_dir / "ui_ux_team" / "assets" / "app_icons" / "windows" / "dj-blue-ai.ico"
+
+        args = [
+            str(entry_point),
+            "--name=dj-blue-ai-debug",
+            "--onefile",
+            "--console",
+            "--debug=all",
+            "--clean",
+            "--exclude-module=PyQt6",
+            "--exclude-module=PyQt5",
+            "--hidden-import=librosa",
+            "--hidden-import=sklearn.utils._typedefs",
+            "--hidden-import=sklearn.neighbors._partition_nodes",
+            "--hidden-import=scipy.special.cython_special",
+            "--hidden-import=audioread",
+            "--hidden-import=resampy",
+            "--hidden-import=soundfile",
+            "--hidden-import=pyaudio",
+            "--hidden-import=miniaudio",
+            "--hidden-import=pkg_resources.py2_warn",
+            "--hidden-import=google.generativeai",
+            "--hidden-import=architects",
+            "--hidden-import=mood_readers",
+            "--hidden-import=ui_ux_team",
+            f"--add-data={assets_source}{os.pathsep}ui_ux_team/assets",
+            f"--add-data={mood_data_source}{os.pathsep}mood_readers/data",
+        ]
+        if icon_candidate.exists():
+            args.append(f"--icon={icon_candidate}")
+        PyInstaller.__main__.run(args)
+        PY
+
     - name: Build Linux AppImage
       if: runner.os == 'Linux'
       run: |
@@ -64,6 +110,7 @@ jobs:
         name: dj-blue-ai-${{ runner.os }}
         path: |
           dist/dj-blue-ai*
+          dist/dj-blue-ai-debug.exe
           dist/*.AppImage
           !dist/*.spec
 
@@ -90,6 +137,7 @@ jobs:
         cp artifacts/dj-blue-ai-Linux/dj-blue-ai-linux-*.AppImage artifacts/dj-blue-ai-linux.AppImage
         cp artifacts/dj-blue-ai-macOS/dj-blue-ai artifacts/dj-blue-ai-macos
         cp artifacts/dj-blue-ai-Windows/dj-blue-ai.exe artifacts/dj-blue-ai-windows.exe
+        cp artifacts/dj-blue-ai-Windows/dj-blue-ai-debug.exe artifacts/dj-blue-ai-windows-debug.exe
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
@@ -99,6 +147,7 @@ jobs:
           artifacts/dj-blue-ai-linux.AppImage
           artifacts/dj-blue-ai-macos
           artifacts/dj-blue-ai-windows.exe
+          artifacts/dj-blue-ai-windows-debug.exe
         draft: false
         prerelease: false
         generate_release_notes: true

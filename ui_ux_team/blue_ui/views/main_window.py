@@ -874,11 +874,24 @@ class MainUI(QWidget):
             self._transcript_win.set_recording_active(False)
             return
 
-        if not self.transcription_manager.is_recording():
-            self.transcription_manager.start_recording()
-        else:
-            self.transcription_manager.stop_recording()
-        self._transcript_win.set_recording_active(self.transcription_manager.is_recording())
+        try:
+            if not self.transcription_manager.is_recording():
+                self.transcription_manager.start_recording()
+            else:
+                self.transcription_manager.stop_recording()
+        except Exception as exc:
+            print(f"Failed to toggle transcript recording: {exc}")
+            try:
+                if self.transcription_manager.is_recording():
+                    self.transcription_manager.stop_recording()
+            except Exception:
+                pass
+        finally:
+            try:
+                is_active = self.transcription_manager.is_recording()
+            except Exception:
+                is_active = False
+            self._transcript_win.set_recording_active(is_active)
 
     def meet_type_menu(self, parent):
         if self._meet_type is None:

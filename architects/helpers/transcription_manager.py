@@ -61,9 +61,24 @@ class TranscriptionManager:
         else:
             print(f'[TranscriptionManager] {info.get("system")} detected, using AudioController')
             self._recorder = AudioController(chunk_seconds=self._chunk_seconds)
-            
-        self._recorder.start()
-        
+
+        try:
+            self._recorder.start()
+        except Exception as exc:
+            # Ensure failed startup does not leave partially initialized recorder state.
+            if self._recorder is not None:
+                try:
+                    self._recorder.stop()
+                except Exception:
+                    pass
+                try:
+                    self._recorder.close()
+                except Exception:
+                    pass
+            self._recorder = None
+            self._is_recording = False
+            raise RuntimeError(f"Failed to start audio recorder: {exc}") from exc
+
         self._is_recording = True
         self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
         self._worker_thread.start()
@@ -75,8 +90,14 @@ class TranscriptionManager:
 
         print('[TranscriptionManager] Stopping recording...')
         self._is_recording = False
-        self._recorder.stop()
-        self._recorder.close()
+        try:
+            self._recorder.stop()
+        except Exception as exc:
+            print(f"[TranscriptionManager] Recorder stop error: {exc}")
+        try:
+            self._recorder.close()
+        except Exception as exc:
+            print(f"[TranscriptionManager] Recorder close error: {exc}")
         self._recorder = None
         
         if self._worker_thread:

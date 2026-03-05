@@ -38,6 +38,39 @@ class _FakePlayer:
         return self._playing
 
 
+class _FailingStartTranscriptionManager:
+    def __init__(self):
+        self.start_calls = 0
+        self.stop_calls = 0
+
+    def is_recording(self):
+        return False
+
+    def start_recording(self):
+        self.start_calls += 1
+        raise RuntimeError("start failed")
+
+    def stop_recording(self):
+        self.stop_calls += 1
+
+
+class _FailingStopTranscriptionManager:
+    def __init__(self):
+        self._recording = True
+        self.stop_calls = 0
+
+    def is_recording(self):
+        return self._recording
+
+    def start_recording(self):
+        self._recording = True
+
+    def stop_recording(self):
+        self.stop_calls += 1
+        self._recording = False
+        raise RuntimeError("stop failed")
+
+
 class TestBlueUIButtonClicks(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -118,6 +151,24 @@ class TestBlueUIButtonClicks(unittest.TestCase):
 
         self._click(self.window._btn_bluebird)
         self.assertIsNone(self.window._bluebird_chat)
+
+    def test_record_transcript_start_failure_does_not_crash(self):
+        manager = _FailingStartTranscriptionManager()
+        self.window.transcription_manager = manager
+
+        self.window.record_transcript()
+
+        self.assertEqual(manager.start_calls, 1)
+        self.assertTrue(self.window._transcript_win.recording_status.isHidden())
+
+    def test_record_transcript_stop_failure_does_not_crash(self):
+        manager = _FailingStopTranscriptionManager()
+        self.window.transcription_manager = manager
+
+        self.window.record_transcript()
+
+        self.assertEqual(manager.stop_calls, 1)
+        self.assertTrue(self.window._transcript_win.recording_status.isHidden())
 
 
 if __name__ == "__main__":
