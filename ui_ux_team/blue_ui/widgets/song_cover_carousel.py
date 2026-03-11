@@ -3,7 +3,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal
 from PySide6.QtCore import QSize
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
@@ -55,8 +57,13 @@ class SongCoverCarousel(QWidget):
         self._next_effect.setOpacity(0.66)
         self._next.setGraphicsEffect(self._next_effect)
 
+        self._current_shadow = QGraphicsDropShadowEffect(self._current)
+        self._current_shadow.setBlurRadius(38)
+        self._current_shadow.setOffset(0, 18)
+        self._current_shadow.setColor(QColor(0, 0, 0, 140))
+        self._current.setGraphicsEffect(self._current_shadow)
+
         self._prev_slot, self._prev_slot_layout = self._make_cover_slot(self._prev)
-        self._current_slot, self._current_slot_layout = self._make_cover_slot(self._current)
         self._next_slot, self._next_slot_layout = self._make_cover_slot(self._next)
 
         self._prev_title = HoverMarqueeTitle("")
@@ -67,8 +74,10 @@ class SongCoverCarousel(QWidget):
         self._next_title.setObjectName("CoverSongTitleNext")
 
         self._prev_col = self._make_cover_column(self._prev_slot, self._prev_title)
-        self._current_col = self._make_cover_column(self._current_slot, self._current_title)
         self._next_col = self._make_cover_column(self._next_slot, self._next_title)
+        self._current_col, self._current_col_layout = self._make_current_cover_column(
+            self._current, self._current_title
+        )
 
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
@@ -98,13 +107,16 @@ class SongCoverCarousel(QWidget):
 
     def sizeHint(self) -> QSize:
         side = int(round(self._preferred_center * self._ratio_side_to_center))
-        width = self._preferred_center + (2 * side) + (2 * self._row.spacing())
+        shadow_pad_x = (38 // 2) + 2
+        width = (self._preferred_center + (2 * shadow_pad_x)) + (2 * side) + (2 * self._row.spacing())
         height = self._preferred_center + self._title_row_height
         return QSize(width, height)
 
     def minimumSizeHint(self) -> QSize:
         side = int(round(self._min_center * self._ratio_side_to_center))
-        width = self._min_center + (2 * side) + (2 * self._row.spacing())
+        shadow_blur = max(8, int(round(self._min_center * 38 / self._preferred_center)))
+        shadow_pad_x = (shadow_blur // 2) + 2
+        width = (self._min_center + (2 * shadow_pad_x)) + (2 * side) + (2 * self._row.spacing())
         height = self._min_center + self._title_row_height
         return QSize(width, height)
 
@@ -138,6 +150,19 @@ class SongCoverCarousel(QWidget):
         layout.addWidget(cover_slot, 0, Qt.AlignTop | Qt.AlignHCenter)
         layout.addWidget(title_widget, 0, Qt.AlignTop | Qt.AlignHCenter)
         return column
+
+    @staticmethod
+    def _make_current_cover_column(button: QWidget, title_widget: QLabel) -> tuple[QWidget, QVBoxLayout]:
+        column = QWidget()
+        column.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        layout = QVBoxLayout(column)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        layout.addWidget(button, 0, Qt.AlignHCenter | Qt.AlignTop)
+        layout.addWidget(title_widget, 0, Qt.AlignHCenter | Qt.AlignTop)
+        return column, layout
 
     def cover_paths(self) -> list[str]:
         return list(self._covers)
@@ -292,35 +317,41 @@ class SongCoverCarousel(QWidget):
         center = max(56, center)
         side = max(36, int(round(center * ratio)))
 
+        shadow_blur = max(8, int(round(center * 38 / self._preferred_center)))
+        shadow_offset_y = max(3, int(round(center * 18 / self._preferred_center)))
+        shadow_pad_x = (shadow_blur // 2) + 2
+
         self._current.setFixedSize(center, center)
         self._prev.setFixedSize(side, side)
         self._next.setFixedSize(side, side)
         side_top_pad = max(0, (center - side) // 2)
         side_slot_h = side_top_pad + side
         self._prev_slot.setFixedSize(side, side_slot_h)
-        self._current_slot.setFixedSize(center, center)
         self._next_slot.setFixedSize(side, side_slot_h)
         self._prev_col.setFixedSize(side, side_slot_h + title_h)
-        self._current_col.setFixedSize(center, center + title_h)
+        self._current_col.setFixedSize(center + (2 * shadow_pad_x), center + title_h)
         self._next_col.setFixedSize(side, side_slot_h + title_h)
         self._prev_slot_layout.setContentsMargins(0, side_top_pad, 0, 0)
-        self._current_slot_layout.setContentsMargins(0, 0, 0, 0)
         self._next_slot_layout.setContentsMargins(0, side_top_pad, 0, 0)
         self._prev_title.setFixedSize(side, title_h)
         self._current_title.setFixedSize(center, title_h)
         self._next_title.setFixedSize(side, title_h)
+        self._current_col_layout.setContentsMargins(shadow_pad_x, 0, shadow_pad_x, 0)
 
         # Keep enough internal breathing room so 1.06 hover scale does not look clipped.
         center_pad = max(4, int(center * 0.06))
         side_pad = max(3, int(side * 0.06))
-        self._current.setContentsMargins(center_pad, center_pad, center_pad, 1)
-        self._prev.setContentsMargins(side_pad, side_pad, side_pad, 1)
-        self._next.setContentsMargins(side_pad, side_pad, side_pad, 1)
+        self._current.setContentsMargins(center_pad, center_pad, center_pad, center_pad)
+        self._prev.setContentsMargins(side_pad, side_pad, side_pad, side_pad)
+        self._next.setContentsMargins(side_pad, side_pad, side_pad, side_pad)
 
         self._current.set_corner_radius(max(14, int(center * 0.10)))
         side_radius = max(10, int(side * 0.10))
         self._prev.set_corner_radius(side_radius)
         self._next.set_corner_radius(side_radius)
+
+        self._current_shadow.setBlurRadius(shadow_blur)
+        self._current_shadow.setOffset(0, shadow_offset_y)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
