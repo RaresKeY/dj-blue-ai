@@ -47,6 +47,7 @@ from ui_ux_team.blue_ui.views.profile_window import ProfileWindowView
 from ui_ux_team.blue_ui.views.settings_popup import FloatingMenu, SettingsPopup
 from ui_ux_team.blue_ui.views.transcript_window import TranscriptWindowView
 from ui_ux_team.blue_ui.widgets.image_button import ImageButton, IMAGE_NOT_FOUND
+from ui_ux_team.blue_ui.widgets.equalizer import EqualizerWidget
 from ui_ux_team.blue_ui.widgets.marquee import QueuedMarqueeLabel
 from ui_ux_team.blue_ui.widgets.song_cover_carousel import SongCoverCarousel
 from ui_ux_team.blue_ui.widgets.theme_chooser import ThemeChooserMenu
@@ -184,6 +185,7 @@ class MainUI(QWidget):
         self._onboarding_arrow_guide = None
         self._cover_carousel = None
         self._timeline = None
+        self._equalizer = None
         self._timeline_dummy_duration = 240.0
         self._timeline_dummy_position = 0.0
         self._timeline_seek_lock_until = 0.0
@@ -294,6 +296,7 @@ class MainUI(QWidget):
         if real_path is None:
             print(f"Music file not found for input: {music_path}")
             self._play_btn.set_image("assets/play.png")
+            self._set_equalizer_playing(False)
             return
 
         if self._player and self._currently_playing == music_path and self._player.is_playing():
@@ -302,6 +305,7 @@ class MainUI(QWidget):
         self._currently_playing = music_path
         started = self._start_player(real_path)
         self._play_btn.set_image("assets/pause.png" if started else "assets/play.png")
+        self._set_equalizer_playing(bool(started))
 
     def _default_music_folder(self) -> Path:
         return default_music_folder()
@@ -1191,6 +1195,31 @@ class MainUI(QWidget):
     def build_timeline_volume_section(self):
         return self.build_main_timeline()
 
+    def _set_equalizer_playing(self, playing: bool) -> None:
+        equalizer = getattr(self, "_equalizer", None)
+        if equalizer is None:
+            return
+        try:
+            equalizer.set_playing(bool(playing))
+        except Exception:
+            pass
+
+    def _sync_equalizer_width_to_controls(self) -> None:
+        equalizer = getattr(self, "_equalizer", None)
+        if equalizer is None:
+            return
+        prev_btn = getattr(self, "_btn_prev", None)
+        next_btn = getattr(self, "_btn_next", None)
+        if prev_btn is None or next_btn is None:
+            return
+        try:
+            left = int(prev_btn.x())
+            right = int(next_btn.x() + next_btn.width())
+            width = max(60, right - left)
+            equalizer.setFixedWidth(width)
+        except Exception:
+            pass
+
     def play_click(self, file_path=None):
         file_path = file_path or self._currently_playing
 
@@ -1203,11 +1232,14 @@ class MainUI(QWidget):
             if real_path is None:
                 print(f"Music file not found for input: {file_path}")
                 self._play_btn.set_image("assets/play.png")
+                self._set_equalizer_playing(False)
                 return
             if not self._start_player(real_path):
                 self._play_btn.set_image("assets/play.png")
+                self._set_equalizer_playing(False)
                 return
             self._play_btn.set_image("assets/pause.png")
+            self._set_equalizer_playing(True)
             if self._timeline is not None:
                 duration = self._player.duration_seconds() if hasattr(self._player, "duration_seconds") else 0.0
                 position = self._player.position_seconds() if hasattr(self._player, "position_seconds") else 0.0
@@ -1220,11 +1252,14 @@ class MainUI(QWidget):
             if resumed is False:
                 self._play_btn.set_image("assets/play.png")
                 self._player = None
+                self._set_equalizer_playing(False)
                 return
             self._play_btn.set_image("assets/pause.png")
+            self._set_equalizer_playing(True)
         else:
             self._player.pause()
             self._play_btn.set_image("assets/play.png")
+            self._set_equalizer_playing(False)
 
     def build_main_controls(self):
         control_layer = QHBoxLayout()
@@ -1256,6 +1291,8 @@ class MainUI(QWidget):
         control_layer.addWidget(self._btn_prev, 0, Qt.AlignVCenter)
         control_layer.addWidget(self._play_btn, 0, Qt.AlignVCenter)
         control_layer.addWidget(self._btn_next, 0, Qt.AlignVCenter)
+
+        QTimer.singleShot(0, self._sync_equalizer_width_to_controls)
 
         return controls
 
@@ -1332,7 +1369,15 @@ class MainUI(QWidget):
             self._timeline.set_duration(self._timeline_dummy_duration)
             # Set a visual default for snapshots/idle state (approx 30%)
             self._timeline.set_position(self._timeline_dummy_duration * 0.3)
+            self._set_equalizer_playing(False)
             return
+
+        try:
+            paused = bool(getattr(self._player, "paused", False))
+            is_playing = bool(self._player.is_playing()) if hasattr(self._player, "is_playing") else False
+            self._set_equalizer_playing(is_playing and not paused)
+        except Exception:
+            pass
         duration = self._player.duration_seconds() if hasattr(self._player, "duration_seconds") else 0.0
         position = self._player.position_seconds() if hasattr(self._player, "position_seconds") else 0.0
         self._timeline.set_duration(duration)
@@ -1452,6 +1497,12 @@ class MainUI(QWidget):
 
         layout.addWidget(self.mood_tag)
         layout.addWidget(self.build_cover_images(), 1)
+
+        self._equalizer = EqualizerWidget()
+        self._equalizer.setFixedHeight(26)
+        self._equalizer.set_playing(False)
+        layout.addWidget(self._equalizer, 0, Qt.AlignHCenter)
+
         layout.addWidget(self.build_timeline_volume_section())
         layout.addWidget(self.build_main_bottom_panel())
 
